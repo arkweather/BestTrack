@@ -235,40 +235,59 @@ def checkArgs(args):
 		
 	else: print 'Mapping disabled'
 
+## Groups cells with the same track ID a track dictionary
+## @param stormCells Dictionary of storm cells
+## @returns stormTracks Dictionary of storm tracks containing storm cells {ID: [cells]}
+def find_clusters(stormCells):
+	stormTracks = {}
+	for cell in stormCells:
+		if stormCells[cell]['track'] in stormTracks:
+			stormTracks[stormCells[cell]['track']]['cells'].append(stormCells[cell])
+		else:
+			stormTracks[stormCells[cell]['track']] = {'cells':[stormCells[cell]]}
+			
+	return stormTracks
+
 ## Computes the Theil-Sen fit for each storm track.
 ## Sources: http://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.mstats.theilslopes.html 
 ##          https://en.wikipedia.org/wiki/Theil%E2%80%93Sen_estimator
-## @param cellTracks A dictionary of track IDs each containing associated Lat, Lon, X, Y, and datetime params
-##                  {'ID':{'x'[], 'y'[], 'lat'[], 'lon'[], 'times'[]}}
-## @returns undecided	
-def theil_sen_batch(cellTracks):
+## @param stormTracks A dictionary of track IDs each containing associated storm cells with Lat, Lon, X, Y, and datetime params
+##                  {'ID':{['x', 'y', 'lat', 'lon', 'times', 'track']}}
+## @returns stormTracks Modified with new values 'u', 'v', 't0', 'tend', 'x0', 'y0'	
+def theil_sen_batch(stormTracks):
 	
-	for track in cellTracks:
+	for track in stormTracks:
 		times = []
-		for date in cellTracks[track]['times']:
-			times.append(time.mktime(date.timetuple())) # Converts datetime object to seconds since epoch time
+		x = []
+		y = []
+		for cell in stormTracks[track]['cells']:
+			times.append(time.mktime(cell['time'].timetuple())) # Converts datetime object to seconds since epoch time
+			x.append(cell['x'])
+			y.append(cell['y'])
 			
 		#print times
 		#print cellTracks[track]['x']
 		
 		if len(times) > 1:
-			theilSenDataX = stats.theilslopes(cellTracks[track]['x'], times)
-			theilSenDataY = stats.theilslopes(cellTracks[track]['y'], times)
+			theilSenDataX = stats.theilslopes(x, times)
+			theilSenDataY = stats.theilslopes(y, times)
 			
-			cellTracks[track]['u'] = theilSenDataX[0]
-			cellTracks[track]['v'] = theilSenDataY[0]
-			cellTracks[track]['t0'] = min(times)
-			cellTracks[track]['tend'] = max(times)
-			cellTracks[track]['x0'] = cellTracks[track]['x'][cellTracks[track]['times'].index(min(cellTracks[track]['times']))]
-			cellTracks[track]['y0'] = cellTracks[track]['y'][cellTracks[track]['times'].index(min(cellTracks[track]['times']))]
+			stormTracks[track]['u'] = theilSenDataX[0]
+			stormTracks[track]['v'] = theilSenDataY[0]
+			stormTracks[track]['t0'] = min(times)
+			stormTracks[track]['tend'] = max(times)
+			stormTracks[track]['x0'] = stormTracks[track]['cells'][times.index(min(times))]['x']
+			stormTracks[track]['y0'] = stormTracks[track]['cells'][times.index(min(times))]['y']
 			
 		else:
-			cellTracks[track]['u'] = 0
-			cellTracks[track]['v'] = 0
-			cellTracks[track]['t0'] = min(times)
-			cellTracks[track]['tend'] = max(times)
-			cellTracks[track]['x0'] = cellTracks[track]['x'][cellTracks[track]['times'].index(min(cellTracks[track]['times']))]
-			cellTracks[track]['y0'] = cellTracks[track]['y'][cellTracks[track]['times'].index(min(cellTracks[track]['times']))]
+			stormTracks[track]['u'] = 0
+			stormTracks[track]['v'] = 0
+			stormTracks[track]['t0'] = min(times)
+			stormTracks[track]['tend'] = max(times)
+			stormTracks[track]['x0'] = stormTracks[track]['cells'][times.index(min(times))]['x']
+			stormTracks[track]['y0'] = stormTracks[track]['cells'][times.index(min(times))]['y']
+			
+	return stormTracks
 		
 	
 ######################################################################################################################
@@ -365,7 +384,7 @@ if __name__ == '__main__':
 	## @{
 	numTrackTimes = 0
 	totNumCells = 0
-	cellTracks = {} 
+	stormCells = {} 
 	## @}
 	
 	# Read in files
@@ -402,18 +421,12 @@ if __name__ == '__main__':
 					numCells = len(cells)
 					
 					for cell in cells:
-						totNumCells += 1
 						cell = cell.split()
-						cellID = int(cell[9])
-						if cellID in cellTracks:
-							cellTracks[cellID]['lat'].append(float(cell[0]))
-							cellTracks[cellID]['lon'].append(float(cell[1]))
-							cellTracks[cellID]['times'].append(fileDate)	
-						else:
-							cellTracks[cellID] = {'times':[fileDate], 'lat':[float(cell[0])], 'lon':[float(cell[1])]}
+						cellID = totNumCells
+						stormCells[cellID] = {'time':fileDate, 'lat':float(cell[0]), 'lon':float(cell[1]), 'track':int(cell[9])}
+						totNumCells += 1
 					
 	print '\nNumber of files: ' + str(numTrackTimes)
-	print 'Number of initial clusters: ' + str(len(cellTracks))
 	print 'Number of storm cells: ' + str(totNumCells) + '\n'
 	
 	if numTrackTimes == 0:
@@ -438,9 +451,9 @@ if __name__ == '__main__':
             lat_0 = meanLat, lon_0 = meanLon)
     ## @}
     
-	for cell in cellTracks:
-		cellTracks[cell]['x'] = m(cellTracks[cell]['lon'], cellTracks[cell]['lat'])[0]
-		cellTracks[cell]['y'] = m(cellTracks[cell]['lon'], cellTracks[cell]['lat'])[1]
+	for cell in stormCells:
+		stormCells[cell]['x'] = m(stormCells[cell]['lon'], stormCells[cell]['lat'])[0]
+		stormCells[cell]['y'] = m(stormCells[cell]['lon'], stormCells[cell]['lat'])[1]
 	
 	# Find ratio between x-y distances and lat-lon distances
 	xMin, yMin = m(MIN_LON, MIN_LAT)
@@ -472,21 +485,30 @@ if __name__ == '__main__':
 	####################################################################################################################
 	
 	REPORT_EVERY = 100
-	ctOrigin = cellTracks
+	ctOrigin = stormCells
 	
 	print 'Beginning Calculations...'
 	
 	# Main iterations
 	for i in range(0, mainIters):
-		anyChanges = 0
-		ctLastLast = cellTracks
+		anyChanges = False
+		ctLastLast = stormCells
 		
 		# Breakup iterations
 		for j in range(0, breakIters):
-			ctLast = cellTracks
-					
-			theil_sen_batch(cellTracks)
+			ctLast = stormCells
 			
+			print '\nBreakup iteration ' + str(j)
+			print 'Finding clusters...'
+			stormTracks = find_clusters(stormCells)
+			
+			print 'Computing Theil-Sen fit for each cluster...'	
+			stormTracks = theil_sen_batch(stormTracks)
+			
+			print 'Assigning each cell to nearest cluster...'
+			
+			
+			break
 			
 	
 	
