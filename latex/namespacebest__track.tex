@@ -1,0 +1,345 @@
+\hypertarget{namespacebest__track}{\section{best\-\_\-track Namespace Reference}
+\label{namespacebest__track}\index{best\-\_\-track@{best\-\_\-track}}
+}
+
+
+Concatenates storm tracks from w2segmotionll.  
+
+
+\subsection*{Functions}
+\begin{DoxyCompactItemize}
+\item 
+\hypertarget{namespacebest__track_a09088a9013df27853bf9f485f05f0a72}{def \hyperlink{namespacebest__track_a09088a9013df27853bf9f485f05f0a72}{get\-Options}}\label{namespacebest__track_a09088a9013df27853bf9f485f05f0a72}
+
+\begin{DoxyCompactList}\small\item\em Retrieve the user-\/speficified command line arguments. \end{DoxyCompactList}\item 
+def \hyperlink{namespacebest__track_a6b44d523a11a359018dc76509518b179}{check\-Args}
+\begin{DoxyCompactList}\small\item\em Check the user-\/specified command line arguments for errors not handled by argparse. \end{DoxyCompactList}\item 
+def \hyperlink{namespacebest__track_ae3b3ae8d6c815814fe4c07f614024a4a}{theil\-\_\-sen\-\_\-batch}
+\begin{DoxyCompactList}\small\item\em Computes the Theil-\/\-Sen fit for each storm track Sources\-: \href{http://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.mstats.theilslopes.html}{\tt http\-://docs.\-scipy.\-org/doc/scipy/reference/generated/scipy.\-stats.\-mstats.\-theilslopes.\-html} \href{https://en.wikipedia.org/wiki/Theil%E2%80%93Sen_estimator}{\tt https\-://en.\-wikipedia.\-org/wiki/\-Theil\%\-E2\%80\%93\-Sen\-\_\-estimator}. \end{DoxyCompactList}\end{DoxyCompactItemize}
+\subsection*{Variables}
+\begin{DoxyCompactItemize}
+\item 
+\hypertarget{namespacebest__track_a67f9d5349c90a840d4a09022531743c3}{tuple \hyperlink{namespacebest__track_a67f9d5349c90a840d4a09022531743c3}{args} = vars(\hyperlink{namespacebest__track_a09088a9013df27853bf9f485f05f0a72}{get\-Options}())}\label{namespacebest__track_a67f9d5349c90a840d4a09022531743c3}
+
+\begin{DoxyCompactList}\small\item\em \begin{DoxyVerb}                                                                                                              #
+\end{DoxyVerb}
+ Main Method -\/ Handle user input, read in files, then run calculations \# \# \end{DoxyCompactList}\item 
+\hypertarget{namespacebest__track_aacc2d16ab53ea982e37e72bc68ee00ac}{tuple {\bfseries hostname} = socket.\-gethostname()}\label{namespacebest__track_aacc2d16ab53ea982e37e72bc68ee00ac}
+
+\item 
+tuple {\bfseries wdssii\-Args}
+\item 
+\hypertarget{namespacebest__track_a7c8bc59cb59e6f944e182ae4f1c1ac5c}{tuple {\bfseries stime\-Detail} = len(start\-Time.\-split('-\/'))}\label{namespacebest__track_a7c8bc59cb59e6f944e182ae4f1c1ac5c}
+
+\item 
+\hypertarget{namespacebest__track_ab451bc85fb0a37d935bc56db27a15342}{tuple {\bfseries etime\-Detail} = len(end\-Time.\-split('-\/'))}\label{namespacebest__track_ab451bc85fb0a37d935bc56db27a15342}
+
+\item 
+\hypertarget{namespacebest__track_a0399d7a7d1d66053450db567e629c014}{tuple {\bfseries file\-Date} = datetime.\-datetime.\-strptime(str(track\-File).split('\-\_\-')\mbox{[}0\mbox{]}, '\%Y-\/\%m-\/\%d-\/\%H\%M\%S')}\label{namespacebest__track_a0399d7a7d1d66053450db567e629c014}
+
+\item 
+\hypertarget{namespacebest__track_a416c0a25339cc0f15fd8eaf13d1375fd}{tuple {\bfseries f} = open(root + '/' + track\-File)}\label{namespacebest__track_a416c0a25339cc0f15fd8eaf13d1375fd}
+
+\item 
+\hypertarget{namespacebest__track_a38354515a520c4f79120177dbde2a05a}{tuple {\bfseries lines} = f.\-readlines()}\label{namespacebest__track_a38354515a520c4f79120177dbde2a05a}
+
+\item 
+\hypertarget{namespacebest__track_aa19b56226815fd88d1cc45b637ad2a85}{list {\bfseries cells} = lines\mbox{[}32\-::5\mbox{]}}\label{namespacebest__track_aa19b56226815fd88d1cc45b637ad2a85}
+
+\item 
+\hypertarget{namespacebest__track_a26998d6bb2a3a38fc849927bb08c20bb}{tuple {\bfseries num\-Cells} = len(cells)}\label{namespacebest__track_a26998d6bb2a3a38fc849927bb08c20bb}
+
+\item 
+\hypertarget{namespacebest__track_a348a698667e2b4bc95dd077dea2ed950}{tuple {\bfseries cell} = cell.\-split()}\label{namespacebest__track_a348a698667e2b4bc95dd077dea2ed950}
+
+\item 
+\hypertarget{namespacebest__track_a7e8ca8180905f84ed1efdd03a8b9ee59}{tuple {\bfseries cell\-I\-D} = int(cell\mbox{[}9\mbox{]})}\label{namespacebest__track_a7e8ca8180905f84ed1efdd03a8b9ee59}
+
+\item 
+\hypertarget{namespacebest__track_a761777735bd7f69e5209f504e9a29091}{tuple {\bfseries rlat1} = np.\-radians(M\-I\-N\-\_\-\-L\-A\-T)}\label{namespacebest__track_a761777735bd7f69e5209f504e9a29091}
+
+\item 
+\hypertarget{namespacebest__track_a02f33965c52d3a103980046e92f12945}{tuple {\bfseries rlat2} = np.\-radians(M\-A\-X\-\_\-\-L\-A\-T)}\label{namespacebest__track_a02f33965c52d3a103980046e92f12945}
+
+\item 
+\hypertarget{namespacebest__track_a11240cf571359982cbebcdce38208efd}{int {\bfseries r} = 6371}\label{namespacebest__track_a11240cf571359982cbebcdce38208efd}
+
+\item 
+\hypertarget{namespacebest__track_a72a0c37e3d8f971a7055e50fe1e166f4}{tuple {\bfseries dlon} = abs(M\-A\-X\-\_\-\-L\-O\-N -\/ M\-I\-N\-\_\-\-L\-O\-N)}\label{namespacebest__track_a72a0c37e3d8f971a7055e50fe1e166f4}
+
+\item 
+\hypertarget{namespacebest__track_ab27e08263eb9b2be8acdd5ec80415725}{tuple {\bfseries dsig} = np.\-arccos(np.\-sin(rlat1) $\ast$ np.\-sin(rlat2) + np.\-cos(rlat1) $\ast$ np.\-cos(rlat2) $\ast$ np.\-cos(np.\-radians(dlon)))}\label{namespacebest__track_ab27e08263eb9b2be8acdd5ec80415725}
+
+\item 
+\hypertarget{namespacebest__track_a943714cd9e0afe14de5022af54c64807}{int \hyperlink{namespacebest__track_a943714cd9e0afe14de5022af54c64807}{R\-E\-P\-O\-R\-T\-\_\-\-E\-V\-E\-R\-Y} = 100}\label{namespacebest__track_a943714cd9e0afe14de5022af54c64807}
+
+\begin{DoxyCompactList}\small\item\em \begin{DoxyVerb}                                                                                                            #
+\end{DoxyVerb}
+ Calculations! \# \# \end{DoxyCompactList}\item 
+\hypertarget{namespacebest__track_a3660b0722f7969db28cb475ac902e345}{{\bfseries ct\-Origin} = cell\-Tracks}\label{namespacebest__track_a3660b0722f7969db28cb475ac902e345}
+
+\item 
+\hypertarget{namespacebest__track_a276f4fb14f3808bc44c073e839678339}{int {\bfseries any\-Changes} = 0}\label{namespacebest__track_a276f4fb14f3808bc44c073e839678339}
+
+\item 
+\hypertarget{namespacebest__track_a51a23609f32b9d23fb592cfadea012aa}{{\bfseries ct\-Last\-Last} = cell\-Tracks}\label{namespacebest__track_a51a23609f32b9d23fb592cfadea012aa}
+
+\item 
+\hypertarget{namespacebest__track_a32cf8f766445d580f875a4c645f308d7}{{\bfseries ct\-Last} = cell\-Tracks}\label{namespacebest__track_a32cf8f766445d580f875a4c645f308d7}
+
+\end{DoxyCompactItemize}
+\begin{Indent}{\bf Best-\/track constants}\par
+\begin{DoxyCompactItemize}
+\item 
+\hypertarget{namespacebest__track_a2e5739a5faf63d617cd44c2dbb20eec7}{int {\bfseries M\-A\-X\-\_\-\-B\-U\-F\-F\-E\-R\-\_\-\-D\-I\-S\-T} = 20}\label{namespacebest__track_a2e5739a5faf63d617cd44c2dbb20eec7}
+
+\item 
+\hypertarget{namespacebest__track_aba2df64924f436d086d70c6ce8a4b9ba}{int {\bfseries M\-A\-X\-\_\-\-B\-U\-F\-F\-E\-R\-\_\-\-T\-I\-M\-E} = 21}\label{namespacebest__track_aba2df64924f436d086d70c6ce8a4b9ba}
+
+\item 
+\hypertarget{namespacebest__track_a86b578e2851b7437c6ce11f03c7a9461}{int {\bfseries M\-A\-X\-\_\-\-J\-O\-I\-N\-\_\-\-T\-I\-M\-E} = 21}\label{namespacebest__track_a86b578e2851b7437c6ce11f03c7a9461}
+
+\item 
+\hypertarget{namespacebest__track_a88c77e199d49c7ace69b898a8ecc07b3}{int {\bfseries M\-I\-N\-\_\-\-M\-I\-N\-\_\-\-C\-E\-L\-L\-S} = 2}\label{namespacebest__track_a88c77e199d49c7ace69b898a8ecc07b3}
+
+\item 
+\hypertarget{namespacebest__track_a7e1c06163a23c61aec01be76d65e7d0e}{int {\bfseries M\-A\-X\-\_\-\-M\-I\-N\-\_\-\-C\-E\-L\-L\-S} = 12}\label{namespacebest__track_a7e1c06163a23c61aec01be76d65e7d0e}
+
+\item 
+\hypertarget{namespacebest__track_a6baaead7a14ba3133c7e4353fabb8e26}{int {\bfseries M\-I\-N\-\_\-\-I\-T\-E\-R\-S} = 3}\label{namespacebest__track_a6baaead7a14ba3133c7e4353fabb8e26}
+
+\item 
+\hypertarget{namespacebest__track_aa7799466a138fd5aabdc241abd206b12}{int {\bfseries M\-A\-X\-\_\-\-I\-T\-E\-R\-S} = 25}\label{namespacebest__track_aa7799466a138fd5aabdc241abd206b12}
+
+\item 
+\hypertarget{namespacebest__track_ad9163f28f8203f76c2e7043704bf2f85}{int {\bfseries M\-I\-N\-\_\-\-B\-R\-E\-A\-K\-U\-P\-\_\-\-I\-T\-E\-R\-S} = 1}\label{namespacebest__track_ad9163f28f8203f76c2e7043704bf2f85}
+
+\item 
+\hypertarget{namespacebest__track_a341c5cee3344c0835d5abe9f8bd97359}{int {\bfseries M\-A\-X\-\_\-\-B\-R\-E\-A\-K\-U\-P\-\_\-\-I\-T\-E\-R\-S} = 5}\label{namespacebest__track_a341c5cee3344c0835d5abe9f8bd97359}
+
+\end{DoxyCompactItemize}
+\end{Indent}
+\begin{Indent}{\bf Mapping constants}\par
+\begin{DoxyCompactItemize}
+\item 
+\hypertarget{namespacebest__track_a30944fddca0dd8f2cdde8ec718160e06}{int {\bfseries M\-I\-N\-\_\-\-L\-A\-T} = 20}\label{namespacebest__track_a30944fddca0dd8f2cdde8ec718160e06}
+
+\item 
+\hypertarget{namespacebest__track_aef9a7c83f7dbd5e0d027c4843d7698db}{int {\bfseries M\-A\-X\-\_\-\-L\-A\-T} = 55}\label{namespacebest__track_aef9a7c83f7dbd5e0d027c4843d7698db}
+
+\item 
+\hypertarget{namespacebest__track_a7ede882707f8a1b6df54e3b3600f9912}{int {\bfseries M\-I\-N\-\_\-\-L\-O\-N} = 230}\label{namespacebest__track_a7ede882707f8a1b6df54e3b3600f9912}
+
+\item 
+\hypertarget{namespacebest__track_a682d4bb28350695c10de8441b4a44c8c}{int {\bfseries M\-A\-X\-\_\-\-L\-O\-N} = 300}\label{namespacebest__track_a682d4bb28350695c10de8441b4a44c8c}
+
+\item 
+\hypertarget{namespacebest__track_a979552c571e04cdee8638000222fca81}{int {\bfseries N\-U\-M\-\_\-\-X\-T\-I\-C\-K\-S} = 8}\label{namespacebest__track_a979552c571e04cdee8638000222fca81}
+
+\item 
+\hypertarget{namespacebest__track_a5c1febbc946132e2aa77bd07b1d26a01}{int {\bfseries N\-U\-M\-\_\-\-Y\-T\-I\-C\-K\-S} = 10}\label{namespacebest__track_a5c1febbc946132e2aa77bd07b1d26a01}
+
+\item 
+\hypertarget{namespacebest__track_a606edaee5f31ea6e364b9a618c8ad056}{int {\bfseries B\-O\-R\-D\-E\-R\-\_\-\-W\-I\-D\-T\-H} = 1}\label{namespacebest__track_a606edaee5f31ea6e364b9a618c8ad056}
+
+\item 
+\hypertarget{namespacebest__track_a4ee6eb61f9da1404350cb13034c8168e}{int {\bfseries B\-E\-F\-O\-R\-E\-\_\-\-W\-I\-D\-T\-H} = 3}\label{namespacebest__track_a4ee6eb61f9da1404350cb13034c8168e}
+
+\item 
+\hypertarget{namespacebest__track_a8f11685890d60951fecf54d09152fdce}{int {\bfseries A\-F\-T\-E\-R\-\_\-\-W\-I\-D\-T\-H} = 1}\label{namespacebest__track_a8f11685890d60951fecf54d09152fdce}
+
+\item 
+\hypertarget{namespacebest__track_ad188c3603f85c3e42bc849914104de84}{int {\bfseries F\-O\-N\-T\-\_\-\-S\-I\-Z\-E} = 12}\label{namespacebest__track_ad188c3603f85c3e42bc849914104de84}
+
+\item 
+\hypertarget{namespacebest__track_a092e890fa54dd7abaf2c11e376cf7ec0}{list {\bfseries B\-O\-R\-D\-E\-R\-\_\-\-C\-O\-L\-O\-R} = \mbox{[}0/255., 0/255., 0/255.\mbox{]}}\label{namespacebest__track_a092e890fa54dd7abaf2c11e376cf7ec0}
+
+\item 
+\hypertarget{namespacebest__track_a99e323d13bfa447eb0f024212ab3013f}{list {\bfseries W\-A\-T\-E\-R\-\_\-\-C\-O\-L\-O\-R} = \mbox{[}0/255., 0/255., 254/255.\mbox{]}}\label{namespacebest__track_a99e323d13bfa447eb0f024212ab3013f}
+
+\item 
+\hypertarget{namespacebest__track_a552793d13cba4cf5a2125c079ffd334a}{list {\bfseries B\-E\-F\-O\-R\-E\-\_\-\-C\-O\-L\-O\-R} = \mbox{[}100/255., 100/255., 100/255.\mbox{]}}\label{namespacebest__track_a552793d13cba4cf5a2125c079ffd334a}
+
+\item 
+\hypertarget{namespacebest__track_a508c48130a09841d8b15825b80a58266}{int {\bfseries I\-M\-A\-G\-E\-\_\-\-R\-E\-S} = 600}\label{namespacebest__track_a508c48130a09841d8b15825b80a58266}
+
+\item 
+\hypertarget{namespacebest__track_af887cb578fdec1d1c68dff15af388285}{tuple {\bfseries I\-M\-A\-G\-E\-\_\-\-R\-E\-S\-\_\-\-S\-T\-R} = str(I\-M\-A\-G\-E\-\_\-\-R\-E\-S)}\label{namespacebest__track_af887cb578fdec1d1c68dff15af388285}
+
+\end{DoxyCompactItemize}
+\end{Indent}
+\begin{Indent}{\bf Other constants}\par
+\begin{DoxyCompactItemize}
+\item 
+\hypertarget{namespacebest__track_ac1264fc268cf0ee64af8377b5943abc1}{int {\bfseries T\-O\-L\-E\-R\-A\-N\-C\-E} = 1}\label{namespacebest__track_ac1264fc268cf0ee64af8377b5943abc1}
+
+\item 
+\hypertarget{namespacebest__track_a9321497741c59370e516a538e4b849d9}{int {\bfseries M\-A\-X\-\_\-\-M\-I\-S\-S\-I\-N\-G} = 10}\label{namespacebest__track_a9321497741c59370e516a538e4b849d9}
+
+\item 
+\hypertarget{namespacebest__track_ae59b71997502fb03bb15ed1cfbbb5a61}{string {\bfseries D\-A\-S\-H\-E\-S} = '\textbackslash{}n'}\label{namespacebest__track_ae59b71997502fb03bb15ed1cfbbb5a61}
+
+\item 
+\hypertarget{namespacebest__track_ad6c48b7874a76728bb22ce7e06fe2312}{string {\bfseries S\-T\-A\-R\-S} = '\textbackslash{}n'}\label{namespacebest__track_ad6c48b7874a76728bb22ce7e06fe2312}
+
+\end{DoxyCompactItemize}
+\end{Indent}
+\begin{Indent}{\bf Args}\par
+{\em Assuming the args check out, save their values here }\begin{DoxyCompactItemize}
+\item 
+\hypertarget{namespacebest__track_ad6ae8bee471b5bddf50647ac040d9a40}{list {\bfseries start\-Time} = \hyperlink{namespacebest__track_a67f9d5349c90a840d4a09022531743c3}{args}\mbox{[}'start\-\_\-time'\mbox{]}}\label{namespacebest__track_ad6ae8bee471b5bddf50647ac040d9a40}
+
+\item 
+\hypertarget{namespacebest__track_a4fe0247c5d515b7e973785b4dce1c735}{list {\bfseries end\-Time} = \hyperlink{namespacebest__track_a67f9d5349c90a840d4a09022531743c3}{args}\mbox{[}'end\-\_\-time'\mbox{]}}\label{namespacebest__track_a4fe0247c5d515b7e973785b4dce1c735}
+
+\item 
+\hypertarget{namespacebest__track_aae20cc78385348669392d58b3914cd90}{list {\bfseries track\-Dir} = \hyperlink{namespacebest__track_a67f9d5349c90a840d4a09022531743c3}{args}\mbox{[}'track\-\_\-dir'\mbox{]}}\label{namespacebest__track_aae20cc78385348669392d58b3914cd90}
+
+\item 
+\hypertarget{namespacebest__track_a24d0326e693edc1f3e51c3a902751e20}{list {\bfseries in\-Suffix} = \hyperlink{namespacebest__track_a67f9d5349c90a840d4a09022531743c3}{args}\mbox{[}'track\-\_\-suffix'\mbox{]}}\label{namespacebest__track_a24d0326e693edc1f3e51c3a902751e20}
+
+\item 
+\hypertarget{namespacebest__track_ae80569570623ae1c56d00c465da193ef}{list {\bfseries buffer\-Dist} = \hyperlink{namespacebest__track_a67f9d5349c90a840d4a09022531743c3}{args}\mbox{[}'buffer\-\_\-dist'\mbox{]}}\label{namespacebest__track_ae80569570623ae1c56d00c465da193ef}
+
+\item 
+\hypertarget{namespacebest__track_a82f42d32db1ae469aebc3b821e6e3938}{list {\bfseries buffer\-Time} = \hyperlink{namespacebest__track_a67f9d5349c90a840d4a09022531743c3}{args}\mbox{[}'buffer\-\_\-time'\mbox{]}}\label{namespacebest__track_a82f42d32db1ae469aebc3b821e6e3938}
+
+\item 
+\hypertarget{namespacebest__track_aedc9b1bf5a2637f0b5ca03c0bfd31f83}{list {\bfseries join\-Time} = \hyperlink{namespacebest__track_a67f9d5349c90a840d4a09022531743c3}{args}\mbox{[}'join\-\_\-time'\mbox{]}}\label{namespacebest__track_aedc9b1bf5a2637f0b5ca03c0bfd31f83}
+
+\item 
+\hypertarget{namespacebest__track_aa9e35e6bed3d1a68c41cfc9fc98df7dc}{list {\bfseries min\-Cells} = \hyperlink{namespacebest__track_a67f9d5349c90a840d4a09022531743c3}{args}\mbox{[}'min\-\_\-cells'\mbox{]}}\label{namespacebest__track_aa9e35e6bed3d1a68c41cfc9fc98df7dc}
+
+\item 
+\hypertarget{namespacebest__track_ab51218acdeb5c92a93084bd082fa75f5}{list {\bfseries main\-Iters} = \hyperlink{namespacebest__track_a67f9d5349c90a840d4a09022531743c3}{args}\mbox{[}'main\-\_\-iters'\mbox{]}}\label{namespacebest__track_ab51218acdeb5c92a93084bd082fa75f5}
+
+\item 
+\hypertarget{namespacebest__track_ab390a8c0dfbd7c90757c7c187b1f522d}{list {\bfseries break\-Iters} = \hyperlink{namespacebest__track_a67f9d5349c90a840d4a09022531743c3}{args}\mbox{[}'breakup\-\_\-iters'\mbox{]}}\label{namespacebest__track_ab390a8c0dfbd7c90757c7c187b1f522d}
+
+\item 
+\hypertarget{namespacebest__track_a860b99075602649990ce269f42abef04}{list {\bfseries out\-Suffix} = \hyperlink{namespacebest__track_a67f9d5349c90a840d4a09022531743c3}{args}\mbox{[}'out\-\_\-suffix'\mbox{]}}\label{namespacebest__track_a860b99075602649990ce269f42abef04}
+
+\item 
+\hypertarget{namespacebest__track_a7387d7094f62db5a08decd81eab85d4d}{list {\bfseries map\-Results} = \hyperlink{namespacebest__track_a67f9d5349c90a840d4a09022531743c3}{args}\mbox{[}'map'\mbox{]}}\label{namespacebest__track_a7387d7094f62db5a08decd81eab85d4d}
+
+\item 
+\hypertarget{namespacebest__track_a927bbc0d950ec6bb0f0fe3a0b30c5008}{list {\bfseries lats} = \hyperlink{namespacebest__track_a67f9d5349c90a840d4a09022531743c3}{args}\mbox{[}'map\-\_\-lat'\mbox{]}}\label{namespacebest__track_a927bbc0d950ec6bb0f0fe3a0b30c5008}
+
+\item 
+\hypertarget{namespacebest__track_ab0b10f6acc68934682d4690f84a0c2f6}{list {\bfseries lons} = \hyperlink{namespacebest__track_a67f9d5349c90a840d4a09022531743c3}{args}\mbox{[}'map\-\_\-lon'\mbox{]}}\label{namespacebest__track_ab0b10f6acc68934682d4690f84a0c2f6}
+
+\item 
+\hypertarget{namespacebest__track_a4ffa467513ff813ad531c5f63d98558e}{list {\bfseries map\-Dir} = \hyperlink{namespacebest__track_a67f9d5349c90a840d4a09022531743c3}{args}\mbox{[}'map\-\_\-dir'\mbox{]}}\label{namespacebest__track_a4ffa467513ff813ad531c5f63d98558e}
+
+\end{DoxyCompactItemize}
+\end{Indent}
+\begin{Indent}{\bf Storm Track Variables}\par
+{\em \begin{DoxyVerb}                                                                                                            #
+\end{DoxyVerb}
+ Read in the files and process data \# \# }\begin{DoxyCompactItemize}
+\item 
+\hypertarget{namespacebest__track_a07d46324ef63c0bfff52456eda9c875a}{int {\bfseries num\-Track\-Times} = 0}\label{namespacebest__track_a07d46324ef63c0bfff52456eda9c875a}
+
+\item 
+\hypertarget{namespacebest__track_a40be8307192f31ef39c26b001e671a51}{int {\bfseries tot\-Num\-Cells} = 0}\label{namespacebest__track_a40be8307192f31ef39c26b001e671a51}
+
+\item 
+\hypertarget{namespacebest__track_ad5140f5f7599009c796ec425a4794851}{dictionary {\bfseries cell\-Tracks} = \{\}}\label{namespacebest__track_ad5140f5f7599009c796ec425a4794851}
+
+\end{DoxyCompactItemize}
+\end{Indent}
+\begin{Indent}{\bf Projection variables}\par
+\begin{DoxyCompactItemize}
+\item 
+\hypertarget{namespacebest__track_a87caff1d8b2878223dd16efc598be337}{tuple {\bfseries mean\-Lat} = np.\-mean(\mbox{[}M\-I\-N\-\_\-\-L\-A\-T, M\-A\-X\-\_\-\-L\-A\-T\mbox{]})}\label{namespacebest__track_a87caff1d8b2878223dd16efc598be337}
+
+\item 
+\hypertarget{namespacebest__track_a77488f5f59485dc15d073feca9c59bb9}{tuple {\bfseries mean\-Lon} = np.\-mean(\mbox{[}M\-I\-N\-\_\-\-L\-O\-N, M\-A\-X\-\_\-\-L\-O\-N\mbox{]})}\label{namespacebest__track_a77488f5f59485dc15d073feca9c59bb9}
+
+\item 
+\hypertarget{namespacebest__track_adc0dd2bbbb7ff9b2b32a976c24b34774}{{\bfseries lat\-Radius} = M\-A\-X\-\_\-\-L\-A\-T-\/mean\-Lat}\label{namespacebest__track_adc0dd2bbbb7ff9b2b32a976c24b34774}
+
+\item 
+\hypertarget{namespacebest__track_ac71ab7de2992469e2d3fa636d721115f}{{\bfseries lon\-Radius} = M\-A\-X\-\_\-\-L\-O\-N-\/mean\-Lon}\label{namespacebest__track_ac71ab7de2992469e2d3fa636d721115f}
+
+\item 
+\hypertarget{namespacebest__track_a1e0a2c8b5aea6474974c39aa070ae3e7}{int {\bfseries xy\-Dist\-Max} = 0}\label{namespacebest__track_a1e0a2c8b5aea6474974c39aa070ae3e7}
+
+\item 
+\hypertarget{namespacebest__track_ab1d7dcaed55cd10abe6811353957d4bd}{int {\bfseries ll\-Dist\-Max} = 0}\label{namespacebest__track_ab1d7dcaed55cd10abe6811353957d4bd}
+
+\item 
+\hypertarget{namespacebest__track_ac85dda825c35219088dd9babe17b00cc}{int {\bfseries distance\-Ratio} = 0}\label{namespacebest__track_ac85dda825c35219088dd9babe17b00cc}
+
+\item 
+tuple {\bfseries m}
+\end{DoxyCompactItemize}
+\end{Indent}
+
+
+\subsection{Detailed Description}
+Concatenates storm tracks from w2segmotionll. This package is approximately equivalent to w2besttrack with the potential for additional features and greater flexibility. This python version was converted from Ryan Lagerquist's M\-A\-T\-L\-A\-B code ryan\-\_\-best\-\_\-tracks.\-m and associated files.
+
+\begin{DoxyAuthor}{Author}
+David Harrison 
+\end{DoxyAuthor}
+\begin{DoxyDate}{Date}
+July 2016 
+\end{DoxyDate}
+
+
+\subsection{Function Documentation}
+\hypertarget{namespacebest__track_a6b44d523a11a359018dc76509518b179}{\index{best\-\_\-track@{best\-\_\-track}!check\-Args@{check\-Args}}
+\index{check\-Args@{check\-Args}!best_track@{best\-\_\-track}}
+\subsubsection[{check\-Args}]{\setlength{\rightskip}{0pt plus 5cm}def best\-\_\-track.\-check\-Args (
+\begin{DoxyParamCaption}
+\item[{}]{args}
+\end{DoxyParamCaption}
+)}}\label{namespacebest__track_a6b44d523a11a359018dc76509518b179}
+
+
+Check the user-\/specified command line arguments for errors not handled by argparse. 
+
+Errors will print to console before terminating the script. 
+\begin{DoxyParams}{Parameters}
+{\em args} & A dictionary of user-\/specified arguments \\
+\hline
+\end{DoxyParams}
+\hypertarget{namespacebest__track_ae3b3ae8d6c815814fe4c07f614024a4a}{\index{best\-\_\-track@{best\-\_\-track}!theil\-\_\-sen\-\_\-batch@{theil\-\_\-sen\-\_\-batch}}
+\index{theil\-\_\-sen\-\_\-batch@{theil\-\_\-sen\-\_\-batch}!best_track@{best\-\_\-track}}
+\subsubsection[{theil\-\_\-sen\-\_\-batch}]{\setlength{\rightskip}{0pt plus 5cm}def best\-\_\-track.\-theil\-\_\-sen\-\_\-batch (
+\begin{DoxyParamCaption}
+\item[{}]{cell\-Tracks}
+\end{DoxyParamCaption}
+)}}\label{namespacebest__track_ae3b3ae8d6c815814fe4c07f614024a4a}
+
+
+Computes the Theil-\/\-Sen fit for each storm track Sources\-: \href{http://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.mstats.theilslopes.html}{\tt http\-://docs.\-scipy.\-org/doc/scipy/reference/generated/scipy.\-stats.\-mstats.\-theilslopes.\-html} \href{https://en.wikipedia.org/wiki/Theil%E2%80%93Sen_estimator}{\tt https\-://en.\-wikipedia.\-org/wiki/\-Theil\%\-E2\%80\%93\-Sen\-\_\-estimator}. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em cell\-Tracks} & A dictionary of track I\-Ds each containing associated Lat, Lon, X, Y, and datetime params \{'I\-D'\-:\{'x', 'y', 'lat', 'lon', 'times'\}\} \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+undecided 
+\end{DoxyReturn}
+
+
+\subsection{Variable Documentation}
+\hypertarget{namespacebest__track_abe41241723275bf75520430095ad367e}{\index{best\-\_\-track@{best\-\_\-track}!m@{m}}
+\index{m@{m}!best_track@{best\-\_\-track}}
+\subsubsection[{m}]{\setlength{\rightskip}{0pt plus 5cm}tuple best\-\_\-track.\-m}}\label{namespacebest__track_abe41241723275bf75520430095ad367e}
+{\bfseries Initial value\-:}
+\begin{DoxyCode}
+1 = Basemap(width = 2 * lonRadius, height = 2 * latRadius, projection = \textcolor{stringliteral}{'aeqd'},
+2             lat\_0 = meanLat, lon\_0 = meanLon)
+\end{DoxyCode}
+\hypertarget{namespacebest__track_a3d860f4f32fd361d8531d097e4a4fbdd}{\index{best\-\_\-track@{best\-\_\-track}!wdssii\-Args@{wdssii\-Args}}
+\index{wdssii\-Args@{wdssii\-Args}!best_track@{best\-\_\-track}}
+\subsubsection[{wdssii\-Args}]{\setlength{\rightskip}{0pt plus 5cm}tuple best\-\_\-track.\-wdssii\-Args}}\label{namespacebest__track_a3d860f4f32fd361d8531d097e4a4fbdd}
+{\bfseries Initial value\-:}
+\begin{DoxyCode}
+1 = dict.fromkeys([\textcolor{stringliteral}{'real\_time'}, \textcolor{stringliteral}{'data\_type'}, \textcolor{stringliteral}{'processed'}, \textcolor{stringliteral}{'root\_dir'}, \textcolor{stringliteral}{'scales'}, \textcolor{stringliteral}{'track\_suffix'}, 
+2                     \textcolor{stringliteral}{'start\_time'}, \textcolor{stringliteral}{'end\_time'}, \textcolor{stringliteral}{'max\_missing'}])
+\end{DoxyCode}
