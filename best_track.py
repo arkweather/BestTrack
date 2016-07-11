@@ -14,6 +14,7 @@ import socket
 import sys
 import os
 import datetime
+from datetime import timedelta
 import time
 import numpy as np
 from mpl_toolkits.basemap import Basemap
@@ -274,19 +275,19 @@ def theil_sen_batch(stormTracks):
 			
 			stormTracks[track]['u'] = theilSenDataX[0]
 			stormTracks[track]['v'] = theilSenDataY[0]
-			stormTracks[track]['t0'] = min(times)
-			stormTracks[track]['tend'] = max(times)
+			stormTracks[track]['t0'] = datetime.datetime.fromtimestamp(min(times))
+			stormTracks[track]['tend'] = datetime.datetime.fromtimestamp(max(times))
 			stormTracks[track]['x0'] = stormTracks[track]['cells'][times.index(min(times))]['x']
 			stormTracks[track]['y0'] = stormTracks[track]['cells'][times.index(min(times))]['y']
 			
 		else:
 			stormTracks[track]['u'] = 0
 			stormTracks[track]['v'] = 0
-			stormTracks[track]['t0'] = min(times)
-			stormTracks[track]['tend'] = max(times)
+			stormTracks[track]['t0'] = datetime.datetime.fromtimestamp(min(times))
+			stormTracks[track]['tend'] = datetime.datetime.fromtimestamp(max(times))
 			stormTracks[track]['x0'] = stormTracks[track]['cells'][times.index(min(times))]['x']
 			stormTracks[track]['y0'] = stormTracks[track]['cells'][times.index(min(times))]['y']
-			
+	
 	return stormTracks
 		
 	
@@ -331,8 +332,8 @@ if __name__ == '__main__':
 	trackDir = args['track_dir']
 	inSuffix = args['track_suffix']
 	bufferDist = args['buffer_dist']
-	bufferTime = args['buffer_time']
-	joinTime = args['join_time']
+	bufferTime = timedelta(minutes = int(args['buffer_time']))
+	joinTime = timedelta(minutes = int(args['join_time']))
 	minCells = args['min_cells']
 	mainIters = args['main_iters']
 	breakIters = args['breakup_iters']
@@ -484,13 +485,15 @@ if __name__ == '__main__':
 	#                                                                                                                  #
 	####################################################################################################################
 	
-	REPORT_EVERY = 100
+	REPORT_EVERY = 1000
 	ctOrigin = stormCells
 	
 	print 'Beginning Calculations...'
 	
 	# Main iterations
 	for i in range(0, mainIters):
+		print '\nMain iteration: ' + str(i + 1)
+		
 		anyChanges = False
 		ctLastLast = stormCells
 		
@@ -498,18 +501,53 @@ if __name__ == '__main__':
 		for j in range(0, breakIters):
 			ctLast = stormCells
 			
-			print '\nBreakup iteration ' + str(j)
+			print '\nBreakup iteration: ' + str(j + 1)
 			print 'Finding clusters...'
 			stormTracks = find_clusters(stormCells)
+			print 'Number of clusters: ' + str(len(stormTracks))
 			
 			print 'Computing Theil-Sen fit for each cluster...'	
 			stormTracks = theil_sen_batch(stormTracks)
 			
+			# Assign cells to nearest cluster
 			print 'Assigning each cell to nearest cluster...'
-			
-			
-			break
-			
+			changedCells = 0
+			for cell in stormCells:
+				
+				cellTime = stormCells[cell]['time']
+				cellX = stormCells[cell]['x']
+				cellY = stormCells[cell]['y']
+				
+				# Only compare to tracks in temporal range
+				tracks = []
+				for track in stormTracks:
+					if stormTracks[track]['t0'] - bufferTime <= cellTime <= stormTracks[track]['tend'] + bufferTime:
+						tracks.append(track)
+						
+				# Calculate distances
+				minDist = 1e9
+				minTrack = stormTracks[min(stormTracks)]
+				for track in tracks:
+					xPoint = stormTracks[track]['x0'] + (stormTracks[track]['u'] * ((cellTime - stormTracks[track]['t0']).seconds))
+					yPoint = stormTracks[track]['y0'] + (stormTracks[track]['v'] * ((cellTime - stormTracks[track]['t0']).seconds))
+					
+					dist = np.sqrt((cellX - xPoint)**2 + (cellY - yPoint)**2)
+					dist = dist * distanceRatio # Convert from x,y to km
+					#print str(dist) + ' ' + str(bufferDist)
+					
+					if dist < minDist:
+						minDist = dist
+						minTrack = track
+						
+				if minDist <= bufferDist and minTrack != stormCells[cell]['track']:
+					stormCells[cell]['track'] = minTrack
+					changedCells += 1
+					
+				if cell % REPORT_EVERY == 0:
+					print '......' + str(cell) + ' of ' + str(totNumCells) + ' assigned......'
+					
+			print 'All cells have been assigned!'
+			print 'Number of modified cells: ' + str(changedCells)
 	
 	
 	
