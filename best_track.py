@@ -236,7 +236,7 @@ def checkArgs(args):
 		
 	else: print 'Mapping disabled'
 
-## Groups cells with the same track ID a track dictionary
+## Groups cells with the same track ID into a track dictionary
 ## @param stormCells Dictionary of storm cells
 ## @returns stormTracks Dictionary of storm tracks containing storm cells {ID: [cells]}
 def find_clusters(stormCells):
@@ -277,8 +277,8 @@ def theil_sen_batch(stormTracks):
 			stormTracks[track]['v'] = theilSenDataY[0]
 			stormTracks[track]['t0'] = datetime.datetime.fromtimestamp(min(times))
 			stormTracks[track]['tend'] = datetime.datetime.fromtimestamp(max(times))
-			stormTracks[track]['x0'] = stormTracks[track]['cells'][times.index(min(times))]['x']
-			stormTracks[track]['y0'] = stormTracks[track]['cells'][times.index(min(times))]['y']
+			stormTracks[track]['x0'] = theilSenDataX[1] + theilSenDataX[0] * (min(times))
+			stormTracks[track]['y0'] = theilSenDataY[1] + theilSenDataY[0] * (min(times))
 			
 		else:
 			stormTracks[track]['u'] = 0
@@ -486,7 +486,7 @@ if __name__ == '__main__':
 	####################################################################################################################
 	
 	REPORT_EVERY = 1000
-	ctOrigin = stormCells
+	scOrigin = stormCells
 	
 	print 'Beginning Calculations...'
 	
@@ -495,11 +495,11 @@ if __name__ == '__main__':
 		print '\nMain iteration: ' + str(i + 1)
 		
 		anyChanges = False
-		ctLastLast = stormCells
+		scLastLast = stormCells
 		
 		# Breakup iterations
 		for j in range(0, breakIters):
-			ctLast = stormCells
+			scLast = stormCells
 			
 			print '\nBreakup iteration: ' + str(j + 1)
 			print 'Finding clusters...'
@@ -518,22 +518,20 @@ if __name__ == '__main__':
 				cellX = stormCells[cell]['x']
 				cellY = stormCells[cell]['y']
 				
-				# Only compare to tracks in temporal range
-				tracks = []
-				for track in stormTracks:
-					if stormTracks[track]['t0'] - bufferTime <= cellTime <= stormTracks[track]['tend'] + bufferTime:
-						tracks.append(track)
-						
 				# Calculate distances
 				minDist = 1e9
 				minTrack = stormTracks[min(stormTracks)]
-				for track in tracks:
+				for track in stormTracks:
+					# Only compare to tracks in temporal range
+					if not (stormTracks[track]['t0'] - bufferTime <= cellTime <= stormTracks[track]['tend'] + bufferTime):
+						continue
+					
 					xPoint = stormTracks[track]['x0'] + (stormTracks[track]['u'] * ((cellTime - stormTracks[track]['t0']).seconds))
 					yPoint = stormTracks[track]['y0'] + (stormTracks[track]['v'] * ((cellTime - stormTracks[track]['t0']).seconds))
 					
 					dist = np.sqrt((cellX - xPoint)**2 + (cellY - yPoint)**2)
 					dist = dist * distanceRatio # Convert from x,y to km
-					#print str(dist) + ' ' + str(bufferDist)
+					#print str(dist)
 					
 					if dist < minDist:
 						minDist = dist
@@ -548,8 +546,51 @@ if __name__ == '__main__':
 					
 			print 'All cells have been assigned!'
 			print 'Number of modified cells: ' + str(changedCells)
+			
+			# Check for changes
+			newChanges = (not scLast == stormCells)
+			anyChanges = newChanges || anyChanges
+			if not newChanges:
+				print 'No new changes. Ending the breakup step.'
+				break
+				
+			# End of breakup iteration
+			
+		# Find new clusters
+		print '\nFinding new clusters after breakup...'
+		lastNumTracks = len(stormTracks)
+		stormTracks = find_clusters(stormCells)
+		print 'Number of original clusters: ' + str(lastNumTracks)
+		print 'Number of new clusters: ' + str(len(stormTracks))
+		
+		# Get Theil-Sen fit
+		print 'Computing Theil-Sen fit for each new cluster...'
+		stormTracks = theil_sen_batch(stormTracks)
+		
+		# Convert track velocities to km/s
+		print 'Converting track velocities to km/s...'
+		for track in stormTracks:
+			stormTracks[track]['u'] = stormTracks[track]['u'] * distanceRatio
+			stormTracks[track]['v'] = stormTracks[track]['v'] * distanceRatio
+		
+		# Join similar clusters
+		print 'Joining similar clusters...'
+		removeTracks = []
+		tracks = sorted(stormTracks.keys())
+		
+		for j in len(tracks):
+			
+			# Skip tracks with only 1 cell
+			if len(stormTracks[tracks[j]]['cells']) < 2:
+				continue
+			
+			for k in range(0, j - 1):
+				if len(stormTracks[tracks[k]]['cells']) < 2: continue
+				if tracks[k] in removeTracks: continue
+				
+					
 	
-	
+			
 	
 	
 	
