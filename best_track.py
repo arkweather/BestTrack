@@ -254,7 +254,7 @@ def find_clusters(stormCells):
 ##          https://en.wikipedia.org/wiki/Theil%E2%80%93Sen_estimator
 ## @param stormTracks A dictionary of track IDs each containing associated storm cells with Lat, Lon, X, Y, and datetime params
 ##                  {'ID':{['x', 'y', 'lat', 'lon', 'times', 'track']}}
-## @returns stormTracks Modified with new values 'u', 'v', 't0', 'tend', 'x0', 'y0'	
+## @returns stormTracks Modified with new values 'u', 'v', 't0', 'tend', 'x0', 'y0', 'xf', 'yf'	
 def theil_sen_batch(stormTracks):
 	
 	for track in stormTracks:
@@ -279,6 +279,8 @@ def theil_sen_batch(stormTracks):
 			stormTracks[track]['tend'] = datetime.datetime.fromtimestamp(max(times))
 			stormTracks[track]['x0'] = theilSenDataX[1] + theilSenDataX[0] * (min(times))
 			stormTracks[track]['y0'] = theilSenDataY[1] + theilSenDataY[0] * (min(times))
+			stormTracks[track]['xf'] = theilSenDataX[1] + theilSenDataX[0] * (max(times))
+			stormTracks[track]['yf'] = theilSenDataY[1] + theilSenDataY[0] * (max(times)) 
 			
 		else:
 			stormTracks[track]['u'] = 0
@@ -287,6 +289,8 @@ def theil_sen_batch(stormTracks):
 			stormTracks[track]['tend'] = datetime.datetime.fromtimestamp(max(times))
 			stormTracks[track]['x0'] = stormTracks[track]['cells'][times.index(min(times))]['x']
 			stormTracks[track]['y0'] = stormTracks[track]['cells'][times.index(min(times))]['y']
+			stormTracks[track]['xf'] = stormTracks[track]['cells'][times.index(max(times))]['x']
+			stormTracks[track]['yf'] = stormTracks[track]['cells'][times.index(max(times))]['y']
 	
 	return stormTracks
 		
@@ -548,13 +552,13 @@ if __name__ == '__main__':
 			print 'Number of modified cells: ' + str(changedCells)
 			
 			# Check for changes
-			newChanges = (not scLast == stormCells)
-			anyChanges = newChanges || anyChanges
-			if not newChanges:
-				print 'No new changes. Ending the breakup step.'
-				break
+			#newChanges = (not scLast == stormCells)
+			#anyChanges = newChanges or anyChanges
+			#if not newChanges:
+			#	print 'No new changes. Ending the breakup step.'
+			#	break
 				
-			# End of breakup iteration
+		# ---- End of breakup iteration ---- #
 			
 		# Find new clusters
 		print '\nFinding new clusters after breakup...'
@@ -567,30 +571,61 @@ if __name__ == '__main__':
 		print 'Computing Theil-Sen fit for each new cluster...'
 		stormTracks = theil_sen_batch(stormTracks)
 		
-		# Convert track velocities to km/s
-		print 'Converting track velocities to km/s...'
-		for track in stormTracks:
-			stormTracks[track]['u'] = stormTracks[track]['u'] * distanceRatio
-			stormTracks[track]['v'] = stormTracks[track]['v'] * distanceRatio
-		
 		# Join similar clusters
 		print 'Joining similar clusters...'
 		removeTracks = []
 		tracks = sorted(stormTracks.keys())
 		
-		for j in len(tracks):
+		for j in range(0, len(tracks)):
+			track1 = tracks[j]
 			
 			# Skip tracks with only 1 cell
-			if len(stormTracks[tracks[j]]['cells']) < 2:
+			if len(stormTracks[track1]['cells']) < 2:
 				continue
 			
 			for k in range(0, j - 1):
-				if len(stormTracks[tracks[k]]['cells']) < 2: continue
-				if tracks[k] in removeTracks: continue
+				track2 = tracks[k]
 				
-					
+				if len(stormTracks[track2]['cells']) < 2: continue
+				if track2 in removeTracks: continue
+				
+				# Check time gap between tracks
+				if stormTracks[track1]['t0'] > stormTracks[track2]['t0']:
+					earlyIndex = track2
+					lateIndex = track1
+				else:
+					earlyIndex = track1
+					lateIndex = track2
+				timeDiff = stormTracks[lateIndex]['t0'] - stormTracks[earlyIndex]['tend']
+				if abs(timeDiff.seconds) > joinTime.seconds: continue
+				
+				# Check distance between tracks
+				x1 = stormTracks[earlyIndex]['xf']
+				y1 = stormTracks[earlyIndex]['yf']
+				x2 = stormTracks[lateIndex]['x0']
+				y2 = stormTracks[lateIndex]['y0']
+				
+				dist = np.sqrt((x1-x2)**2 + (y1 - y2)**2)
+				dist = dist * distanceRatio
+				
+				# Cap storm motion at 200 kph
+				# TODO: See if there's a better way to do this or at least make it a setting
+				if dist > 200 * (timeDiff.seconds / 3600.): continue
+				
+				# Check velocity difference between tracks
+				u1 = stormTracks[earlyIndex]['u'] * distanceRatio # Km / s
+				v1 = stormTracks[earlyIndex]['v'] * distanceRatio # Km / s
+				u2 = stormTracks[lateIndex]['u'] * distanceRatio  # Km / s
+				v2 = stormTracks[lateIndex]['v'] * distanceRatio  # Km / s
+				
+				velocityDiff = np.sqrt((u1 - u2)**2 + (v1 - v2)**2)
+				if velocityDiff > float(bufferDist) / bufferTime.seconds: continue
+				
+				print 'Tracks ' + str(track1) + ' and ' + str(track2)
+				print 'Time Diff ' + str(timeDiff)
+				print 'Dist ' + str(dist)
+				print 'Vel Diff ' + str(velocityDiff) + '\n'
 	
-			
 	
 	
 	
