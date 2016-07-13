@@ -551,7 +551,7 @@ if __name__ == '__main__':
 			print 'All cells have been assigned!'
 			print 'Number of modified cells: ' + str(changedCells)
 			
-			# Check for changes
+			# TODO: Check for changes
 			#newChanges = (not scLast == stormCells)
 			#anyChanges = newChanges or anyChanges
 			#if not newChanges:
@@ -575,6 +575,7 @@ if __name__ == '__main__':
 		print 'Joining similar clusters...'
 		removeTracks = []
 		tracks = sorted(stormTracks.keys())
+		totNumTracks = len(tracks)
 		
 		for j in range(0, len(tracks)):
 			track1 = tracks[j]
@@ -621,14 +622,37 @@ if __name__ == '__main__':
 				velocityDiff = np.sqrt((u1 - u2)**2 + (v1 - v2)**2)
 				if velocityDiff > float(bufferDist) / bufferTime.seconds: continue
 				
-				print 'Tracks ' + str(track1) + ' and ' + str(track2)
-				print 'Time Diff ' + str(timeDiff)
-				print 'Dist ' + str(dist)
-				print 'Vel Diff ' + str(velocityDiff) + '\n'
-	
-	
-	
-	
+				#print 'Tracks ' + str(track1) + ' and ' + str(track2)
+				#print 'Time Diff ' + str(timeDiff)
+				#print 'Dist ' + str(dist)
+				#print 'Vel Diff ' + str(velocityDiff) + '\n'
+				
+				# Check if track predictions are close enough
+				dist = []				
+				
+				for cell in stormTracks[lateIndex]['cells']:
+					xActual = cell['x']
+					yActual = cell['y']
+					
+					cellTime = cell['time']
+					xPredict = stormTracks[earlyIndex]['x0'] + (stormTracks[earlyIndex]['u'] * ((cellTime - stormTracks[track]['t0']).seconds))
+					yPredict = stormTracks[earlyIndex]['y0'] + (stormTracks[earlyIndex]['v'] * ((cellTime - stormTracks[track]['t0']).seconds))
+					
+					dist.append(np.sqrt((xPredict - xActual)**2 + (yPredict - yActual)**2) * distanceRatio)
+					
+				if np.mean(dist) > bufferDist: continue
+				
+				# If the two tracks survived the process, join them 'cause clearly they're meant to be together ;-)
+				removeTracks.append(track2)
+				for cell in stormTracks[track2]['cells']:
+					stormCells[stormCells.keys()[stormCells.values().index(cell)]]['track'] = track1
+					
+			if j % REPORT_EVERY == 0:
+				print '......' + str(j) + ' of ' + str(totNumTracks) + ' processed for joining......'
+				
+		print 'All tracks have been joined if necessary!'
+		print 'Merged ' + str(len(removeTracks)) + ' tracks\n\n'
+		
 	
 	
 	
