@@ -19,6 +19,7 @@ import time
 import numpy as np
 from mpl_toolkits.basemap import Basemap
 import scipy.stats.mstats as stats
+from collections import defaultdict
 
 ## @name Best-track constants
 ## @{ 
@@ -248,6 +249,44 @@ def find_clusters(stormCells):
 			stormTracks[stormCells[cell]['track']] = {'cells':[stormCells[cell]]}
 			
 	return stormTracks
+
+## Computes the Theil-Sen fit for a single storm track.
+## See theil_sen_batch() for more detail.
+## @param track The value of a single track within the storm track dictionary 
+## @returns a storm track dict value with updated items for the provided track
+def theil_sen_single(track):
+	times = []
+	x = []
+	y = []
+	for cell in track['cells']:
+		times.append(time.mktime(cell['time'].timetuple())) # Converts datetime object to seconds since epoch time
+		x.append(cell['x'])
+		y.append(cell['y'])
+		
+	if len(times) > 1:
+		theilSenDataX = stats.theilslopes(x, times)
+		theilSenDataY = stats.theilslopes(y, times)
+		
+		track['u'] = theilSenDataX[0]
+		track['v'] = theilSenDataY[0]
+		track['t0'] = datetime.datetime.fromtimestamp(min(times))
+		track['tend'] = datetime.datetime.fromtimestamp(max(times))
+		track['x0'] = theilSenDataX[1] + theilSenDataX[0] * (min(times))
+		track['y0'] = theilSenDataY[1] + theilSenDataY[0] * (min(times))
+		track['xf'] = theilSenDataX[1] + theilSenDataX[0] * (max(times))
+		track['yf'] = theilSenDataY[1] + theilSenDataY[0] * (max(times)) 
+		
+	else:
+		track['u'] = 0
+		track['v'] = 0
+		track['t0'] = datetime.datetime.fromtimestamp(min(times))
+		track['tend'] = datetime.datetime.fromtimestamp(max(times))
+		track['x0'] = track['cells'][times.index(min(times))]['x']
+		track['y0'] = track['cells'][times.index(min(times))]['y']
+		track['xf'] = track['cells'][times.index(max(times))]['x']
+		track['yf'] = track['cells'][times.index(max(times))]['y']
+		
+	return track
 
 ## Computes the Theil-Sen fit for each storm track.
 ## Sources: http://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.mstats.theilslopes.html 
@@ -558,14 +597,14 @@ if __name__ == '__main__':
 			#	print 'No new changes. Ending the breakup step.'
 			#	break
 				
-		# ---- End of breakup iteration ---- #
+		# ------ End of breakup iteration ------ #
 			
 		# Find new clusters
 		print '\nFinding new clusters after breakup...'
 		lastNumTracks = len(stormTracks)
 		stormTracks = find_clusters(stormCells)
-		print 'Number of original clusters: ' + str(lastNumTracks)
-		print 'Number of new clusters: ' + str(len(stormTracks))
+		print 'Original number of clusters: ' + str(lastNumTracks)
+		print 'New number of clusters: ' + str(len(stormTracks))
 		
 		# Get Theil-Sen fit
 		print 'Computing Theil-Sen fit for each new cluster...'
@@ -646,14 +685,78 @@ if __name__ == '__main__':
 				removeTracks.append(track2)
 				for cell in stormTracks[track2]['cells']:
 					stormCells[stormCells.keys()[stormCells.values().index(cell)]]['track'] = track1
+					stormTracks[track1]['cells'].append(cell)
+				
+				stormTracks[track1] = theil_sen_single(stormTracks[track1])
 					
 			if j % REPORT_EVERY == 0:
 				print '......' + str(j) + ' of ' + str(totNumTracks) + ' processed for joining......'
 				
 		print 'All tracks have been joined if necessary!'
-		print 'Merged ' + str(len(removeTracks)) + ' tracks\n\n'
+		print 'Merged ' + str(len(removeTracks)) + ' tracks\n'
 		
-	
+		# ------ End of Joining process ------ #
+		
+		print 'Finding new clusters after joining...'
+		lastNumTracks = len(stormTracks)
+		stormTracks = find_clusters(stormCells)
+		stormTracks = theil_sen_batch(stormTracks)
+		print 'Original number of clusters: ' + str(lastNumTracks)
+		print 'New number of clusters: ' + str(len(stormTracks))
+		
+		# Break ties (multiple cells assigned to same cluster at same time step)
+		print '\nBreaking ties...'
+		scLast = stormCells
+		count = 0
+		breaks = 0
+		
+		for track in stormTracks:
+			if len(stormTracks[track]['cells']) < 2: continue
+			
+			# Map all cells to their times
+			times = {}
+			for cell in stormTracks[track]['cells']:
+				if cell['time'] in times:
+					times[cell['time']].append(cell)
+				else:
+					times[cell['time']] = [cell]
+					
+			# Get duplicate times
+			for thisTime in times:
+				cells = []
+				if len(times[thisTime]) > 1:
+					cells = times[thisTime]
+					
+					# Compare each cell and keep the one closest to the track
+					dist = []
+					for cell in cells:
+						cellX = cell['x']
+						cellY = cell['y']
+						xPredict = stormTracks[track]['x0'] + (stormTracks[track]['u'] * ((thisTime - stormTracks[track]['t0']).seconds))
+						yPredict = stormTracks[track]['y0'] + (stormTracks[track]['v'] * ((thisTime - stormTracks[track]['t0']).seconds))
+					
+						dist.append(np.sqrt((xPredict - cellX)**2 + (yPredict - cellY)**2) * distanceRatio)
+					
+					minCell = cells[dist.index(min(dist))]
+					for cell in cells:
+						if cell != minCell:
+							stormTracks[track]['cells'].remove(cell)
+							stormCells[stormCells.keys()[stormCells.values().index(cell)]]['track'] = np.NaN
+							
+					breaks += 1
+							
+			count += 1
+			if count % REPORT_EVERY == 0:
+				print '......' + str(count) + ' of ' + str(totNumTracks) + ' tracks processed for ties......'
+				
+		print 'All tracks have been processed for tie breaks'
+		print 'Number of tie breaks: ' + str(breaks)
+					
+			
+					
+				
+				
+		
 	
 	
 	
