@@ -243,8 +243,10 @@ def checkArgs(args):
 def find_clusters(stormCells):
 	stormTracks = {}
 	for cell in stormCells:
+		if stormCells[cell]['track'] == np.NaN: continue
 		if stormCells[cell]['track'] in stormTracks:
 			stormTracks[stormCells[cell]['track']]['cells'].append(stormCells[cell])
+			
 		else:
 			stormTracks[stormCells[cell]['track']] = {'cells':[stormCells[cell]]}
 			
@@ -255,6 +257,8 @@ def find_clusters(stormCells):
 ## @param track The value of a single track within the storm track dictionary 
 ## @returns a storm track dict value with updated items for the provided track
 def theil_sen_single(track):
+	
+	if track == np.NaN: return
 	times = []
 	x = []
 	y = []
@@ -297,6 +301,7 @@ def theil_sen_single(track):
 def theil_sen_batch(stormTracks):
 	
 	for track in stormTracks:
+		if track == np.NaN: continue
 		times = []
 		x = []
 		y = []
@@ -621,13 +626,16 @@ if __name__ == '__main__':
 			
 			# Skip tracks with only 1 cell
 			if len(stormTracks[track1]['cells']) < 2:
+				if j % REPORT_EVERY == 0: print '......' + str(j) + ' of ' + str(totNumTracks) + ' processed for joining......'
 				continue
+			if track1 == np.NaN: continue
 			
 			for k in range(0, j - 1):
 				track2 = tracks[k]
 				
 				if len(stormTracks[track2]['cells']) < 2: continue
 				if track2 in removeTracks: continue
+				if track2 == np.NaN: continue
 				
 				# Check time gap between tracks
 				if stormTracks[track1]['t0'] > stormTracks[track2]['t0']:
@@ -711,7 +719,10 @@ if __name__ == '__main__':
 		breaks = 0
 		
 		for track in stormTracks:
-			if len(stormTracks[track]['cells']) < 2: continue
+			if len(stormTracks[track]['cells']) < 2: 
+				count += 1
+				if count % REPORT_EVERY == 0: print '......' + str(count) + ' of ' + str(totNumTracks) + ' tracks processed for ties......'
+				continue
 			
 			# Map all cells to their times
 			times = {}
