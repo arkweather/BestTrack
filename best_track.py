@@ -18,6 +18,7 @@ from datetime import timedelta
 import time
 import numpy as np
 from mpl_toolkits.basemap import Basemap
+import matplotlib.pyplot as plt
 import scipy.stats.mstats as stats
 from collections import defaultdict
 
@@ -86,7 +87,7 @@ def getOptions():
 																											'ranges [22, 25], [26, 27]')
 	parser.add_argument('-lon', '--map_lon', type = float, nargs = '*', metavar = '', default = None, help = 'A list of longitude (E) ranges seperated by a space. 250 255 260 270 would ' +
 																											'produce ranges [250, 255], [260, 270]')
-	parser.add_argument('-md', '--map_dir', type = str, metavar = '', default = 'wdssii/maps', help = 'Output directory for maps')
+	parser.add_argument('-md', '--map_dir', type = str, metavar = '', default = 'maps', help = 'Output directory for maps')
 	
 	args = parser.parse_args()
 	return args
@@ -795,18 +796,70 @@ if __name__ == '__main__':
 	if mapResults:
 		print 'Preparing to plot maps...'
 		
-		# Read in shapefiles here to save time and memory
-		m.readshapefile('/States_Shapefiles/s_11au16', name = 'states')	
-		m.readshapefile('/province/PROVINCE', name = 'canada')			
-				
 		# Get original storm tracks
 		stOrigin = find_clusters(scOrigin)
 		stOrigin = theil_sen_batch(stOrigin)
 		
-		# Generate each map
-		for i in range(0, len(lats) / 2):
+		# Handle empty specifications
+		if lats == None or lats == []:
+			lats = [MIN_LAT, MAX_LAT]
+			
+		if lons == None or lons == []:
+			lons = [MIN_LON, MAX_LON]
 			
 		
-	
-	
+		# Generate each map
+		for i in range(0, len(lats), 2):
+			print 'Plotting figure ' + str((i / 2) + 1) + ' of ' + str(len(lats) / 2)
+			
+			fig = plt.figure(i / 2)
+			
+			theseLats = [lats[i], lats[i+1]]
+			theseLons = [lons[i] - 360, lons[i+1] - 360]
+			
+			meanLat = np.mean(theseLats)
+			meanLon = np.mean(theseLons)
+			latRadius = max(theseLats) - meanLat
+			lonRadius = max(theseLons) - meanLon
+			
+			m = Basemap(width = 2 * lonRadius, height = 2 * latRadius, projection = 'aeqd',
+            			lat_0 = meanLat, lon_0 = meanLon)
+            
+			# Read in shapefiles
+			m.readshapefile('States_Shapefiles/s_11au16', name = 'states')
+			m.readshapefile('province/province', name = 'canada')			
+            
+			# Sort cells in each original track by time and then get lat lon pairs for each cell
+			for track in stOrigin:
+				times = []
+				originCells = []
+				for cell in stOrigin[track]['cells']:
+					times.append(cell['time'])
+				times = sorted(times)
+				for cellTime in times:
+					for cell in stOrigin[track]['cells']:
+						if cell['time'] == cellTime:
+							originCells.append([cell['lon']-360, cell['lat']])
+							continue
+				
+				print originCells	
+				break		
+				#plt.plot(originCells, color = 'r', marker = 'o')
+				
+			# Sort cells in each track by time and then get lat lon pairs for each cell
+			for track in stormTracks:
+				times = []
+				finalCells = []
+				for cell in stormTracks[track]['cells']:
+					times.append(cell['time'])
+				times = sorted(times)
+				for cellTime in times:
+					for cell in stOrigin[track]['cells']:
+						if cell['time'] == cellTime:
+							finalCells.append([cell['lon']-360, cell['lat']])
+							continue
+							
+			
+			
+			plt.show()
 	
