@@ -243,13 +243,12 @@ def checkArgs(args):
 def find_clusters(stormCells):
 	stormTracks = {}
 	for cell in stormCells:
-		if stormCells[cell]['track'] == np.NaN: continue
-		if stormCells[cell]['track'] in stormTracks:
-			stormTracks[stormCells[cell]['track']]['cells'].append(stormCells[cell])
-			
+		track = stormCells[cell]['track']
+		if track in stormTracks:
+			stormTracks[track]['cells'].append(stormCells[cell])
 		else:
-			stormTracks[stormCells[cell]['track']] = {'cells':[stormCells[cell]]}
-			
+			stormTracks[track] = {'cells':[stormCells[cell]]}			
+	
 	return stormTracks
 
 ## Computes the Theil-Sen fit for a single storm track.
@@ -258,7 +257,6 @@ def find_clusters(stormCells):
 ## @returns a storm track dict value with updated items for the provided track
 def theil_sen_single(track):
 	
-	if track == np.NaN: return
 	times = []
 	x = []
 	y = []
@@ -267,7 +265,7 @@ def theil_sen_single(track):
 		x.append(cell['x'])
 		y.append(cell['y'])
 		
-	if len(times) > 1:
+	if len(np.unique(times)) > 1:
 		theilSenDataX = stats.theilslopes(x, times)
 		theilSenDataY = stats.theilslopes(y, times)
 		
@@ -301,7 +299,6 @@ def theil_sen_single(track):
 def theil_sen_batch(stormTracks):
 	
 	for track in stormTracks:
-		if track == np.NaN: continue
 		times = []
 		x = []
 		y = []
@@ -313,7 +310,7 @@ def theil_sen_batch(stormTracks):
 		#print times
 		#print cellTracks[track]['x']
 		
-		if len(times) > 1:
+		if len(np.unique(times)) > 1:
 			theilSenDataX = stats.theilslopes(x, times)
 			theilSenDataY = stats.theilslopes(y, times)
 			
@@ -472,7 +469,7 @@ if __name__ == '__main__':
 					for cell in cells:
 						cell = cell.split()
 						cellID = totNumCells
-						stormCells[cellID] = {'time':fileDate, 'lat':float(cell[0]), 'lon':float(cell[1]), 'track':int(cell[9])}
+						stormCells[cellID] = {'time':fileDate, 'lat':float(cell[0]), 'lon':float(cell[1]), 'track':str(cell[9]) + '_' + str(fileDate.date())} 
 						totNumCells += 1
 					
 	print '\nNumber of files: ' + str(numTrackTimes)
@@ -581,7 +578,9 @@ if __name__ == '__main__':
 					dist = dist * distanceRatio # Convert from x,y to km
 					#print str(dist)
 					
-					if dist < minDist:
+					# Force cells to be assigned to a track (not NaN)
+					# If need be they'll be weeded out in the tie break step later
+					if dist < minDist and track != np.NaN:
 						minDist = dist
 						minTrack = track
 						
@@ -656,7 +655,7 @@ if __name__ == '__main__':
 				dist = np.sqrt((x1-x2)**2 + (y1 - y2)**2)
 				dist = dist * distanceRatio
 				
-				# Cap storm motion at 200 kph
+				# Cap storm motion at 200 kph - seems reasonable
 				# TODO: See if there's a better way to do this or at least make it a setting
 				if dist > 200 * (timeDiff.seconds / 3600.): continue
 				
@@ -756,17 +755,57 @@ if __name__ == '__main__':
 							
 					breaks += 1
 							
-			count += 1
 			if count % REPORT_EVERY == 0:
 				print '......' + str(count) + ' of ' + str(totNumTracks) + ' tracks processed for ties......'
+			count += 1
 				
 		print 'All tracks have been processed for tie breaks'
 		print 'Number of tie breaks: ' + str(breaks)
 					
+		# ------ End of Main iteration ------ #
+		
+	# Remove clusters with too few cells
+	print '\nRemoving clusters with too few cells...'
+	numRemoved = 0
+	for track in stormTracks:
+		if len(stormTracks[track]['cells']) < int(minCells):
+			for cell in stormTracks[track]['cells']:
+				cell['track'] = np.NaN
+			numRemoved += 1
+	
+	print 'Number of removed tracks: ' + str(numRemoved + 1)
+	lastNumTracks = len(stormTracks)
+	
+	print '\nPerforming final cluster identification...'
+	stormTracks = find_clusters(stormCells)
+	stormTracks = theil_sen_batch(stormTracks)
+	stormTracks.pop(np.NaN, None)
+	print 'Original number of clusters: ' + str(lastNumTracks)
+	print 'New number of clusters: ' + str(len(stormTracks))
+	
+	print DASHES
+	
+	
+	####################################################################################################################
+	#                                                                                                                  #
+	#  Maps!                                                                                                           #
+	#                                                                                                                  #
+	####################################################################################################################		
+	
+	if mapResults:
+		print 'Preparing to plot maps...'
+		
+		# Read in shapefiles here to save time and memory
+		m.readshapefile('/States_Shapefiles/s_11au16', name = 'states')	
+		m.readshapefile('/province/PROVINCE', name = 'canada')			
+				
+		# Get original storm tracks
+		stOrigin = find_clusters(scOrigin)
+		stOrigin = theil_sen_batch(stOrigin)
+		
+		# Generate each map
+		for i in range(0, len(lats) / 2):
 			
-					
-				
-				
 		
 	
 	
