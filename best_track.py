@@ -13,6 +13,7 @@ import argparse
 import socket
 import sys
 import os
+import copy
 import datetime
 from datetime import timedelta
 import time
@@ -280,8 +281,8 @@ def theil_sen_single(track):
 		track['yf'] = theilSenDataY[1] + theilSenDataY[0] * (max(times)) 
 		
 	else:
-		track['u'] = 0
-		track['v'] = 0
+		stormTracks[track]['u'] = np.NaN
+		stormTracks[track]['v'] = np.NaN
 		track['t0'] = datetime.datetime.fromtimestamp(min(times))
 		track['tend'] = datetime.datetime.fromtimestamp(max(times))
 		track['x0'] = track['cells'][times.index(min(times))]['x']
@@ -325,8 +326,8 @@ def theil_sen_batch(stormTracks):
 			stormTracks[track]['yf'] = theilSenDataY[1] + theilSenDataY[0] * (max(times)) 
 			
 		else:
-			stormTracks[track]['u'] = 0
-			stormTracks[track]['v'] = 0
+			stormTracks[track]['u'] = np.NaN
+			stormTracks[track]['v'] = np.NaN
 			stormTracks[track]['t0'] = datetime.datetime.fromtimestamp(min(times))
 			stormTracks[track]['tend'] = datetime.datetime.fromtimestamp(max(times))
 			stormTracks[track]['x0'] = stormTracks[track]['cells'][times.index(min(times))]['x']
@@ -487,15 +488,13 @@ if __name__ == '__main__':
 	## @{
 	meanLat = np.mean([MIN_LAT, MAX_LAT])
 	meanLon = np.mean([MIN_LON, MAX_LON])
-	latRadius = MAX_LAT - meanLat
-	lonRadius = MAX_LON - meanLon
 	xyDistMax = 0
 	llDistMax = 0
 	distanceRatio = 0
 	
 	# Setup equidistant map projection
-	m = Basemap(width = 2 * lonRadius, height = 2 * latRadius, projection = 'aeqd',
-            lat_0 = meanLat, lon_0 = meanLon)
+	m = Basemap(llcrnrlon = MIN_LON, llcrnrlat = MIN_LAT, urcrnrlon = MAX_LON, urcrnrlat = MAX_LAT, 
+						projection = 'aeqd', lat_0 = meanLat, lon_0 = meanLon)
     ## @}
     
 	for cell in stormCells:
@@ -531,10 +530,9 @@ if __name__ == '__main__':
 	#                                                                                                                  #
 	####################################################################################################################
 	
-	REPORT_EVERY = 1000
-	scOrigin = stormCells
-	
 	print 'Beginning Calculations...'
+	REPORT_EVERY = 1000
+	scOrigin = copy.deepcopy(stormCells)
 	
 	# Main iterations
 	for i in range(0, mainIters):
@@ -571,9 +569,17 @@ if __name__ == '__main__':
 					# Only compare to tracks in temporal range
 					if not (stormTracks[track]['t0'] - bufferTime <= cellTime <= stormTracks[track]['tend'] + bufferTime):
 						continue
+						
+					# Preference individual cells to join other tracks
+					if len(stormTracks[track]['cells']) < 2 and track == stormCells[cell]['track']:
+						continue
 					
-					xPoint = stormTracks[track]['x0'] + (stormTracks[track]['u'] * ((cellTime - stormTracks[track]['t0']).seconds))
-					yPoint = stormTracks[track]['y0'] + (stormTracks[track]['v'] * ((cellTime - stormTracks[track]['t0']).seconds))
+					if stormTracks[track]['u'] == np.NaN:
+						xPoint = stormTracks[track]['x0']
+						yPoint = stormTracks[track]['y0']
+					else:
+						xPoint = stormTracks[track]['x0'] + (stormTracks[track]['u'] * ((cellTime - stormTracks[track]['t0']).seconds))
+						yPoint = stormTracks[track]['y0'] + (stormTracks[track]['v'] * ((cellTime - stormTracks[track]['t0']).seconds))
 					
 					dist = np.sqrt((cellX - xPoint)**2 + (cellY - yPoint)**2)
 					dist = dist * distanceRatio # Convert from x,y to km
@@ -633,7 +639,7 @@ if __name__ == '__main__':
 			for k in range(0, j - 1):
 				track2 = tracks[k]
 				
-				if len(stormTracks[track2]['cells']) < 2: continue
+				#if len(stormTracks[track2]['cells']) < 2: continue
 				if track2 in removeTracks: continue
 				if track2 == np.NaN: continue
 				
@@ -661,33 +667,39 @@ if __name__ == '__main__':
 				if dist > 200 * (timeDiff.seconds / 3600.): continue
 				
 				# Check velocity difference between tracks
-				u1 = stormTracks[earlyIndex]['u'] * distanceRatio # Km / s
-				v1 = stormTracks[earlyIndex]['v'] * distanceRatio # Km / s
-				u2 = stormTracks[lateIndex]['u'] * distanceRatio  # Km / s
-				v2 = stormTracks[lateIndex]['v'] * distanceRatio  # Km / s
+				if stormTracks[earlyIndex]['u'] != np.NaN and stormTracks[lateIndex]['u'] != np.NaN:
+					u1 = stormTracks[earlyIndex]['u'] * distanceRatio # Km / s
+					v1 = stormTracks[earlyIndex]['v'] * distanceRatio # Km / s
+					u2 = stormTracks[lateIndex]['u'] * distanceRatio  # Km / s
+					v2 = stormTracks[lateIndex]['v'] * distanceRatio  # Km / s
 				
-				velocityDiff = np.sqrt((u1 - u2)**2 + (v1 - v2)**2)
-				if velocityDiff > float(bufferDist) / bufferTime.seconds: continue
+					velocityDiff = np.sqrt((u1 - u2)**2 + (v1 - v2)**2)
+					if velocityDiff > float(bufferDist) / bufferTime.seconds: continue
 				
 				#print 'Tracks ' + str(track1) + ' and ' + str(track2)
 				#print 'Time Diff ' + str(timeDiff)
 				#print 'Dist ' + str(dist)
 				#print 'Vel Diff ' + str(velocityDiff) + '\n'
 				
-				# Check if track predictions are close enough
-				dist = []				
-				
-				for cell in stormTracks[lateIndex]['cells']:
-					xActual = cell['x']
-					yActual = cell['y']
+				# Check if track predictions are close enough				
+				if stormTracks[earlyIndex]['u'] != np.NaN and stormTracks[lateIndex]['u'] != np.NaN:
+					dist = []
+					for cell in stormTracks[lateIndex]['cells']:
+						xActual = cell['x']
+						yActual = cell['y']
 					
-					cellTime = cell['time']
-					xPredict = stormTracks[earlyIndex]['x0'] + (stormTracks[earlyIndex]['u'] * ((cellTime - stormTracks[track]['t0']).seconds))
-					yPredict = stormTracks[earlyIndex]['y0'] + (stormTracks[earlyIndex]['v'] * ((cellTime - stormTracks[track]['t0']).seconds))
+						cellTime = cell['time']
+						xPredict = stormTracks[earlyIndex]['x0'] + (stormTracks[earlyIndex]['u'] * ((cellTime - stormTracks[lateIndex]['t0']).seconds))
+						yPredict = stormTracks[earlyIndex]['y0'] + (stormTracks[earlyIndex]['v'] * ((cellTime - stormTracks[lateIndex]['t0']).seconds))
 					
-					dist.append(np.sqrt((xPredict - xActual)**2 + (yPredict - yActual)**2) * distanceRatio)
+						dist.append(np.sqrt((xPredict - xActual)**2 + (yPredict - yActual)**2) * distanceRatio)
 					
-				if np.mean(dist) > bufferDist: continue
+					if np.mean(dist) > bufferDist: continue
+				else:
+					# TODO: Implement a slope check here. Even if the single cell doesn't have a known velocity, we can see
+					# TODO: how it compares to the prospective track (so we don't get 90 degree turns everywhere...
+					dist = np.sqrt((stormTracks[lateIndex]['x0'] - stormTracks[earlyIndex]['xf'])**2 + (stormTracks[lateIndex]['y0'] - stormTracks[earlyIndex]['yf'])**2) * distanceRatio
+					if dist > bufferDist: continue
 				
 				# If the two tracks survived the process, join them 'cause clearly they're meant to be together ;-)
 				removeTracks.append(track2)
@@ -720,8 +732,8 @@ if __name__ == '__main__':
 		
 		for track in stormTracks:
 			if len(stormTracks[track]['cells']) < 2: 
-				count += 1
 				if count % REPORT_EVERY == 0: print '......' + str(count) + ' of ' + str(totNumTracks) + ' tracks processed for ties......'
+				count += 1
 				continue
 			
 			# Map all cells to their times
@@ -812,54 +824,61 @@ if __name__ == '__main__':
 		for i in range(0, len(lats), 2):
 			print 'Plotting figure ' + str((i / 2) + 1) + ' of ' + str(len(lats) / 2)
 			
-			fig = plt.figure(i / 2)
+			fig = plt.figure((i / 2) + 1)
 			
 			theseLats = [lats[i], lats[i+1]]
-			theseLons = [lons[i] - 360, lons[i+1] - 360]
+			theseLons = [lons[i], lons[i+1]]
 			
 			meanLat = np.mean(theseLats)
 			meanLon = np.mean(theseLons)
-			latRadius = max(theseLats) - meanLat
-			lonRadius = max(theseLons) - meanLon
 			
-			m = Basemap(width = 2 * lonRadius, height = 2 * latRadius, projection = 'aeqd',
-            			lat_0 = meanLat, lon_0 = meanLon)
+			m = Basemap(llcrnrlon = min(theseLons), llcrnrlat = min(theseLats), urcrnrlon = max(theseLons), urcrnrlat = max(theseLats), 
+						projection = 'aeqd', lat_0 = meanLat, lon_0 = meanLon)
             
 			# Read in shapefiles
-			m.readshapefile('States_Shapefiles/s_11au16', name = 'states')
-			m.readshapefile('province/province', name = 'canada')			
+			m.readshapefile('States_Shapefiles/s_11au16', name = 'states', drawbounds = True)
+			m.readshapefile('province/province', name = 'canada', drawbounds = True)			
             
 			# Sort cells in each original track by time and then get lat lon pairs for each cell
 			for track in stOrigin:
 				times = []
-				originCells = []
+				originCellsX = []
+				originCellsY = []
+				
 				for cell in stOrigin[track]['cells']:
 					times.append(cell['time'])
 				times = sorted(times)
 				for cellTime in times:
 					for cell in stOrigin[track]['cells']:
 						if cell['time'] == cellTime:
-							originCells.append([cell['lon']-360, cell['lat']])
-							continue
+							originCellsX.append(m(cell['lon'], cell['lat'])[0])
+							originCellsY.append(m(cell['lon'], cell['lat'])[1])
+							break
 				
-				print originCells	
-				break		
-				#plt.plot(originCells, color = 'r', marker = 'o')
+				#print originCells	
+				#break
+				if len(originCellsX) < 2: m.scatter(originCellsX, originCellsY, color = 'grey', marker = 'o')		
+				else: m.plot(originCellsX, originCellsY, color = 'grey', linewidth = 4)
 				
 			# Sort cells in each track by time and then get lat lon pairs for each cell
 			for track in stormTracks:
 				times = []
-				finalCells = []
+				finalCellsX = []
+				finalCellsY = []
 				for cell in stormTracks[track]['cells']:
 					times.append(cell['time'])
+				#print times
+				#break
 				times = sorted(times)
 				for cellTime in times:
-					for cell in stOrigin[track]['cells']:
+					for cell in stormTracks[track]['cells']:
 						if cell['time'] == cellTime:
-							finalCells.append([cell['lon']-360, cell['lat']])
-							continue
+							finalCellsX.append(m(cell['lon'], cell['lat'])[0])
+							finalCellsY.append(m(cell['lon'], cell['lat'])[1])
+							break
 							
-			
+				m.plot(finalCellsX, finalCellsY, color = 'r', linewidth = 1)			
 			
 			plt.show()
+
 	
