@@ -640,6 +640,7 @@ if __name__ == '__main__':
 				#if len(stormTracks[track2]['cells']) < 2: continue
 				if track2 in removeTracks: continue
 				if track2 == np.NaN: continue
+				if len(stormTracks[track2]['cells']) < 2: continue
 				
 				# Check time gap between tracks
 				if stormTracks[track1]['t0'] > stormTracks[track2]['t0']:
@@ -673,31 +674,6 @@ if __name__ == '__main__':
 				
 					velocityDiff = np.sqrt((u1 - u2)**2 + (v1 - v2)**2)
 					if velocityDiff > float(bufferDist) / bufferTime.seconds: continue
-					
-				# TODO: Implement a slope check here. Even if the single cell doesn't have a known velocity, we can see
-				# TODO: how it compares to the prospective track (so we don't get 90 degree turns everywhere...
-				elif stormTracks[earlyIndex]['u'] == np.NaN and stormTracks[lateIndex]['u'] != np.NaN:
-					t1 = stormTracks[earlyIndex]['tf']
-					t2 = stormTracks[lateIndex]['t0']
-					u1 = ((x2 - x1) / float((t2 - t1).total_seconds())) * distanceRatio # Km / s
-					u2 = stormTracks[lateIndex]['u'] * distanceRatio 			# Km / s
-					v1 = ((y2 - y1) / float((t2 - t1).total_seconds())) * distanceRatio # Km / s
-					v2 = stormTracks[lateIndex]['u'] * distanceRatio			# Km / s
-					
-					velocityDiff = np.sqrt((u1 - u2)**2 + (v1 - v2)**2)
-					if velocityDiff > float(bufferDist) / bufferTime.seconds: continue					
-						
-				elif stormTracks[earlyIndex]['u'] != np.NaN and stormTracks[lateIndex]['u'] == np.NaN:
-					t1 = stormTracks[earlyIndex]['tf']
-					t2 = stormTracks[lateIndex]['t0']
-					u1 = stormTracks[earlyIndex]['u'] * distanceRatio 			# Km / s
-					u2 = ((x2 - x1) / float((t2 - t1).total_seconds())) * distanceRatio # Km / s
-					v1 = stormTracks[earlyIndex]['u'] * distanceRatio			# Km / s
-					v2 = ((y2 - y1) / float((t2 - t1).total_seconds())) * distanceRatio # Km / s
-					
-					velocityDiff = np.sqrt((u1 - u2)**2 + (v1 - v2)**2)
-					if velocityDiff > float(bufferDist) / bufferTime.seconds: continue
-				else: continue
 					 
 				
 				#print 'Tracks ' + str(track1) + ' and ' + str(track2)
@@ -719,28 +695,6 @@ if __name__ == '__main__':
 						dist.append(np.sqrt((xPredict - xActual)**2 + (yPredict - yActual)**2) * distanceRatio)
 					
 					if np.mean(dist) > bufferDist: continue
-				
-				elif stormTracks[earlyIndex]['u'] == np.NaN and stormTracks[lateIndex]['u'] != np.NaN:
-					xActual = stormTracks[earlyIndex]['cells'][0]['x']
-					yActual = stormTracks[earlyIndex]['cells'][0]['y']
-					cellTime = stormTracks[earlyIndex]['cells'][0]['time']
-					
-					xPredict = stormTracks[lateIndex]['x0'] + (stormTracks[lateIndex]['u'] * ((cellTime - stormTracks[lateIndex]['t0']).total_seconds()))
-					yPredict = stormTracks[lateIndex]['x0'] + (stormTracks[lateIndex]['u'] * ((cellTime - stormTracks[lateIndex]['t0']).total_seconds()))
-					
-					dist = np.sqrt((xPredict - xActual)**2 + (yPredict - yActual)**2) * distanceRatio
-					if dist > bufferDist: continue
-					
-				elif stormTracks[earlyIndex]['u'] != np.NaN and stormTracks[lateIndex]['u'] == np.NaN:
-					xActual = stormTracks[lateIndex]['cells'][0]['x']
-					yActual = stormTracks[lateIndex]['cells'][0]['y']
-					cellTime = stormTracks[lateIndex]['cells'][0]['time']
-					
-					xPredict = stormTracks[earlyIndex]['x0'] + (stormTracks[earlyIndex]['u'] * ((cellTime - stormTracks[earlyIndex]['t0']).total_seconds()))
-					yPredict = stormTracks[earlyIndex]['x0'] + (stormTracks[earlyIndex]['u'] * ((cellTime - stormTracks[earlyIndex]['t0']).total_seconds()))
-					
-					dist = np.sqrt((xPredict - xActual)**2 + (yPredict - yActual)**2) * distanceRatio
-					if dist > bufferDist: continue
 				
 				# If the two tracks survived the process, join them 'cause clearly they're meant to be together ;-)
 				removeTracks.append(track2)
