@@ -555,7 +555,6 @@ if __name__ == '__main__':
 			print 'Assigning each cell to nearest cluster...'
 			changedCells = 0
 			for cell in stormCells:
-				
 				cellTime = stormCells[cell]['time']
 				cellX = stormCells[cell]['x']
 				cellY = stormCells[cell]['y']
@@ -571,6 +570,9 @@ if __name__ == '__main__':
 					# Preference individual cells to join other tracks
 					if len(stormTracks[track]['cells']) < 2 and track == stormCells[cell]['track']:
 						continue
+						
+					# TODO test
+					#if len(stormTracks[track]['cells']) > 3: continue
 					
 					if stormTracks[track]['u'] == np.NaN:
 						xPoint = stormTracks[track]['x0']
@@ -589,9 +591,11 @@ if __name__ == '__main__':
 						minDist = dist
 						minTrack = track
 						
-				if minDist <= bufferDist and minTrack != stormCells[cell]['track']:
+				if minDist <= bufferDist:
+					if minTrack != stormCells[cell]['track']: changedCells += 1
 					stormCells[cell]['track'] = minTrack
-					changedCells += 1
+				else:
+					stormCells[cell]['track'] = np.NaN
 					
 				if cell % REPORT_EVERY == 0:
 					print '......' + str(cell) + ' of ' + str(totNumCells) + ' assigned......'
@@ -650,7 +654,7 @@ if __name__ == '__main__':
 					earlyIndex = track1
 					lateIndex = track2
 				timeDiff = stormTracks[lateIndex]['t0'] - stormTracks[earlyIndex]['tend']
-				if abs(timeDiff.total_seconds()) > joinTime.seconds: continue
+				if abs(timeDiff.total_seconds()) > joinTime.total_seconds: continue
 				
 				# Check distance between tracks
 				x1 = stormTracks[earlyIndex]['xf']
@@ -663,17 +667,17 @@ if __name__ == '__main__':
 				
 				# Cap storm motion at 200 kph - seems reasonable
 				# TODO: See if there's a better way to do this or at least make it a setting
-				if dist > abs(200 * (timeDiff.total_seconds() / 3600.)): continue
+				#if dist > abs(100 * (timeDiff.total_seconds() / 3600.)): continue
+				if dist > 50: continue
 				
 				# Check velocity difference between tracks
-				if stormTracks[earlyIndex]['u'] != np.NaN and stormTracks[lateIndex]['u'] != np.NaN:
-					u1 = stormTracks[earlyIndex]['u'] * distanceRatio # Km / s
-					v1 = stormTracks[earlyIndex]['v'] * distanceRatio # Km / s
-					u2 = stormTracks[lateIndex]['u'] * distanceRatio  # Km / s
-					v2 = stormTracks[lateIndex]['v'] * distanceRatio  # Km / s
-				
-					velocityDiff = np.sqrt((u1 - u2)**2 + (v1 - v2)**2)
-					if velocityDiff > float(bufferDist) / bufferTime.seconds: continue
+				u1 = stormTracks[earlyIndex]['u'] * distanceRatio # Km / s
+				v1 = stormTracks[earlyIndex]['v'] * distanceRatio # Km / s
+				u2 = stormTracks[lateIndex]['u'] * distanceRatio  # Km / s
+				v2 = stormTracks[lateIndex]['v'] * distanceRatio  # Km / s
+			
+				velocityDiff = np.sqrt((u1 - u2)**2 + (v1 - v2)**2)
+				if velocityDiff > float(bufferDist) / bufferTime.total_seconds(): continue
 					 
 				
 				#print 'Tracks ' + str(track1) + ' and ' + str(track2)
@@ -682,24 +686,23 @@ if __name__ == '__main__':
 				#print 'Vel Diff ' + str(velocityDiff) + '\n'
 				
 				# Check if track predictions are close enough				
-				if stormTracks[earlyIndex]['u'] != np.NaN and stormTracks[lateIndex]['u'] != np.NaN:
-					dist = []
-					for cell in stormTracks[lateIndex]['cells']:
-						xActual = cell['x']
-						yActual = cell['y']
-					
-						cellTime = cell['time']
-						xPredict = stormTracks[earlyIndex]['x0'] + (stormTracks[earlyIndex]['u'] * ((cellTime - stormTracks[lateIndex]['t0']).total_seconds()))
-						yPredict = stormTracks[earlyIndex]['y0'] + (stormTracks[earlyIndex]['v'] * ((cellTime - stormTracks[lateIndex]['t0']).total_seconds()))
-					
-						dist.append(np.sqrt((xPredict - xActual)**2 + (yPredict - yActual)**2) * distanceRatio)
-					
-					if np.mean(dist) > bufferDist: continue
+				dist = []
+				for cell in stormTracks[lateIndex]['cells']:
+					xActual = cell['x']
+					yActual = cell['y']
+				
+					cellTime = cell['time']
+					xPredict = stormTracks[earlyIndex]['xf'] + (stormTracks[earlyIndex]['u'] * ((cellTime - stormTracks[earlyIndex]['tend']).total_seconds()))
+					yPredict = stormTracks[earlyIndex]['yf'] + (stormTracks[earlyIndex]['v'] * ((cellTime - stormTracks[earlyIndex]['tend']).total_seconds()))
+				
+					dist.append(np.sqrt((xPredict - xActual)**2 + (yPredict - yActual)**2) * distanceRatio)
+				
+				if np.mean(dist) > bufferDist: continue
 				
 				# If the two tracks survived the process, join them 'cause clearly they're meant to be together ;-)
 				removeTracks.append(track2)
 				for cell in stormTracks[track2]['cells']:
-					stormCells[stormCells.keys()[stormCells.values().index(cell)]]['track'] = track1
+					cell['track'] = track1
 					stormTracks[track1]['cells'].append(cell)
 				
 				stormTracks[track1] = theil_sen_single(stormTracks[track1])
