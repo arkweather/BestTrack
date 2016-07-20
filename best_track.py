@@ -13,6 +13,7 @@ import argparse
 import socket
 import sys
 import os
+import json
 import copy
 import datetime
 from datetime import timedelta
@@ -45,14 +46,9 @@ MAX_LON = 300
 NUM_XTICKS = 8
 NUM_YTICKS = 10
 
-BORDER_WIDTH = 1
-BEFORE_WIDTH = 3
-AFTER_WIDTH = 1
+BEFORE_WIDTH = 4
+AFTER_WIDTH = 2
 FONT_SIZE = 12
-# TITLE_FONT_SIZE = 8
-BORDER_COLOR = [0/255., 0/255., 0/255.]
-WATER_COLOR = [0/255., 0/255., 254/255.]
-BEFORE_COLOR = [100/255., 100/255., 100/255.]
 
 IMAGE_RES = 600
 IMAGE_RES_STR = str(IMAGE_RES)
@@ -74,15 +70,15 @@ def getOptions():
 	parser.add_argument('start_time', type = str, metavar = 'start_time', help = 'Start time in yyyy-mm-dd-hhmmss, or yyyy-mm-dd, etc')
 	parser.add_argument('end_time', type = str, metavar = 'end_time', help = 'End time in yyyy-mm-dd-hhmmss, or yyyy-mm-dd, etc')
 	parser.add_argument('-td', '--track_dir', type = str, metavar = '', default = 'segmotion_files4david', help = 'Location of source files')
-	parser.add_argument('-ts', '--track_scale', type = float, metavar = '', default = 50., help = 'Scale used in segmotion')
-	parser.add_argument('-tsf', '--track_suffix', type = str, metavar = '', default = 'smooth02_30dBZ', help = 'Name of last subdirectory for source files')
+	parser.add_argument('-sf', '--dir_suffix', type = str, metavar = '', default = 'smooth02_30dBZ', help = 'Name of last subdirectory for source files')
 	parser.add_argument('-bd', '--buffer_dist', type = float, metavar = '', default = 10., help = 'Buffer distance between storm cell and Theil-Sen trajectory (km)')
 	parser.add_argument('-bt', '--buffer_time', type = float, metavar = '', default = 11., help = 'Buffer time for joining two Theil-Sen trajectories (min)')
 	parser.add_argument('-jt', '--join_time', type = float, metavar = '', default = 16., help = 'Time threshold to join two or more storm tracks (min)')
 	parser.add_argument('-mc', '--min_cells', type = int, metavar = '', default = 3, help = 'Minimum number of storm cells per track')
 	parser.add_argument('-mi', '--main_iters', type = int, metavar = '', default = 5, help = 'Number of main iterations')
 	parser.add_argument('-bi', '--breakup_iters', type = int, metavar = '', default = 3, help = 'Number of breakup iterations')
-	parser.add_argument('-os', '--out_suffix', type = str, metavar = '', default = 'tracks', help = 'Name of last subdirectory for new tracking files')
+	parser.add_argument('-o', '--out_dir', type = str, metavar = '', default = 'tracks', help = 'Name of output directory for new tracking files')
+	parser.add_argument('-ts', '--time_step', action = 'store_true', help = 'Toggle file creation for each time step. Default is to combine all times into one file.')
 	parser.add_argument('-m', '--map', action = 'store_true', help = 'Toggle map creation')
 	parser.add_argument('-lat', '--map_lat', type = float, nargs = '*', metavar = '', default = None, help = 'A list of latitude ranges seperated by a space. 22 25 26 27 would produce ' +
 																											'ranges [22, 25], [26, 27]')
@@ -102,14 +98,14 @@ def checkArgs(args):
 	
 	startTime = args['start_time']
 	endTime = args['end_time']
-	inSuffix = args['track_suffix']
+	inSuffix = args['dir_suffix']
 	bufferDist = args['buffer_dist']
 	bufferTime = args['buffer_time']
 	joinTime = args['join_time']
 	minCells = args['min_cells']
 	mainIters = args['main_iters']
 	breakIters = args['breakup_iters']
-	outSuffix = args['out_suffix']
+	outDir = args['out_dir']
 	mapResults = args['map']
 	lats = args['map_lat']
 	lons = args['map_lon']
@@ -182,10 +178,9 @@ def checkArgs(args):
 		sys.exit(2)
 	else: print 'Number of breakup iterations:  ' + str(breakIters)
 	
-	if '\\' in outSuffix or '/' in outSuffix:
-		print '\nERROR: Output directory suffix must not contain / or \\.  Instead got: ' + outSuffix + '\n'
-		sys.exit(2)
-	else: print 'Name of last subdirectory for new tracking files:  ' + outSuffix
+	if not os.path.isdir(outDir):
+		print 'Unable to locate output directory. The specified location will be created.'
+		os.makedirs(outDir)
 	
 	# Handle map creation variables
 	if mapResults:
@@ -354,7 +349,7 @@ if __name__ == '__main__':
 	print 'Current working directory: ' + os.getcwd() + '\n'
 	
 	# Pass along user-specified args
-	wdssiiArgs = dict.fromkeys(['real_time', 'data_type', 'processed', 'root_dir', 'scales', 'track_suffix', 
+	wdssiiArgs = dict.fromkeys(['real_time', 'data_type', 'processed', 'root_dir', 'dir_suffix', 
 					'start_time', 'end_time', 'max_missing'])
 					
 	for param in wdssiiArgs:
@@ -362,7 +357,6 @@ if __name__ == '__main__':
 		elif param == 'data_type': wdssiiArgs[param] = 'tracks'
 		elif param == 'processed': wdssiiArgs[param] = True
 		elif param == 'root_dir': wdssiiArgs[param] = args['track_dir']
-		elif param == 'scales': wdssiiArgs[param] = args['track_scale']
 		elif param == 'max_missing': wdssiiArgs[param] = MAX_MISSING
 		else: wdssiiArgs[param] = args[param]
 		
@@ -377,14 +371,15 @@ if __name__ == '__main__':
 	startTime = args['start_time']
 	endTime = args['end_time']
 	trackDir = args['track_dir']
-	inSuffix = args['track_suffix']
+	inSuffix = args['dir_suffix']
 	bufferDist = args['buffer_dist']
 	bufferTime = timedelta(minutes = int(args['buffer_time']))
 	joinTime = timedelta(minutes = int(args['join_time']))
 	minCells = args['min_cells']
 	mainIters = args['main_iters']
 	breakIters = args['breakup_iters']
-	outSuffix = args['out_suffix']
+	outDir = args['out_dir']
+	outType = args['time_step']
 	mapResults = args['map']
 	lats = args['map_lat']
 	lons = args['map_lon']
@@ -436,6 +431,7 @@ if __name__ == '__main__':
 	## @}
 	
 	# Read in files
+	# TODO: Handle probsevere / raw segmotion
 	for root, dirs, files in os.walk(trackDir):
 		if files and not dirs and os.path.split(root)[-1] == inSuffix:
 			for trackFile in files:
@@ -471,7 +467,7 @@ if __name__ == '__main__':
 					for cell in cells:
 						cell = cell.split()
 						cellID = totNumCells
-						stormCells[cellID] = {'time':fileDate, 'lat':float(cell[0]), 'lon':float(cell[1]), 'track':str(cell[9]) + '_' + str(fileDate.date())} 
+						stormCells[cellID] = {'time':fileDate, 'lat':float(cell[0]), 'lon':float(cell[1]), 'track':str(cell[9]) + '_' + str(fileDate.date()), 'refl':float(cell[5])} 
 						totNumCells += 1
 					
 	print '\nNumber of files: ' + str(numTrackTimes)
@@ -665,9 +661,8 @@ if __name__ == '__main__':
 				dist = np.sqrt((x1-x2)**2 + (y1 - y2)**2)
 				dist = dist * distanceRatio
 				
-				# Cap storm motion at 200 kph - seems reasonable
-				# TODO: See if there's a better way to do this or at least make it a setting
-				#if dist > abs(100 * (timeDiff.total_seconds() / 3600.)): continue
+				# Limit track join distance to 50 km
+				# Note: This is a major change, but it seems to work so...
 				if dist > 50: continue
 				
 				# Check velocity difference between tracks
@@ -678,12 +673,6 @@ if __name__ == '__main__':
 			
 				velocityDiff = np.sqrt((u1 - u2)**2 + (v1 - v2)**2)
 				if velocityDiff > float(bufferDist) / bufferTime.total_seconds(): continue
-					 
-				
-				#print 'Tracks ' + str(track1) + ' and ' + str(track2)
-				#print 'Time Diff ' + str(timeDiff)
-				#print 'Dist ' + str(dist)
-				#print 'Vel Diff ' + str(velocityDiff) + '\n'
 				
 				# Check if track predictions are close enough				
 				dist = []
@@ -820,9 +809,9 @@ if __name__ == '__main__':
 		
 		# Generate each map
 		for i in range(0, len(lats), 2):
-			print 'Plotting figure ' + str((i / 2) + 1) + ' of ' + str(len(lats) / 2)
+			print 'Plotting figure ' + str((i / 2) + 1) + ' of ' + str(len(lats) / 2) + '...'
 			
-			fig = plt.figure((i / 2) + 1)
+			fig = plt.figure((i / 2) + 1, figsize = (1920 / 96., 1080 / 96.), dpi = 96)
 			
 			theseLats = [lats[i], lats[i+1]]
 			theseLons = [lons[i], lons[i+1]]
@@ -853,18 +842,18 @@ if __name__ == '__main__':
 							originCellsY.append(m(cell['lon'], cell['lat'])[1])
 							break
 				
-				#print originCells	
-				#break
 				if len(originCellsX) < 2: m.scatter(originCellsX, originCellsY, color = 'grey', marker = 'o')		
-				else: m.plot(originCellsX, originCellsY, color = 'grey', linewidth = 4)
+				else: m.plot(originCellsX, originCellsY, color = 'grey', linewidth = BEFORE_WIDTH)
 				
 			# Sort cells in each track by time and then get lat lon pairs for each cell
 			for track in stormTracks:
 				times = []
+				refl = []
 				finalCellsX = []
 				finalCellsY = []
 				for cell in stormTracks[track]['cells']:
 					times.append(cell['time'])
+					refl.append(cell['refl'])
 				#print times
 				#break
 				times = sorted(times)
@@ -874,9 +863,103 @@ if __name__ == '__main__':
 							finalCellsX.append(m(cell['lon'], cell['lat'])[0])
 							finalCellsY.append(m(cell['lon'], cell['lat'])[1])
 							break
-							
-				m.plot(finalCellsX, finalCellsY, color = 'r', linewidth = 1)			
+				
+				if max(refl) >= 50: color = 'r'
+				elif max(refl) >= 40 and max(refl) < 50: color = 'y'
+				else: color = 'g'
+				m.plot(finalCellsX, finalCellsY, color = color, linewidth = AFTER_WIDTH)			
 			
 			plt.show()
+			
+			# Save map to file
+			print 'Saving figure ' + mapDir + '/' + str(startTime.date()) + '_' + str(endTime.date()) + '_' + str((i/2) + 1) + '.png' + '...'
+			plt.savefig(mapDir + '/' + str(startTime.date()) + '_' + str(endTime.date()) + '_' + str((i/2) + 1) + '.png', bbox_inches = 'tight')
+		
+		print DASHES
+	
+	####################################################################################################################
+	#                                                                                                                  #
+	#  Output                                                                                                          #
+	#                                                                                                                  #
+	####################################################################################################################
+			
+	print 'Preparing output...'
+	print 'Finding new start time, age, and speed for each cell...'
+	
+	for track in stormTracks:
+		# Get startime and age
+		# Convert all datetimes to str for JSON
+		for cell in stormTracks[track]['cells']:
+			cell['start_time'] = stormTracks[track]['t0']
+			cell['age'] = (cell['time'] - cell['start_time']).total_seconds()
+			
+		# Sort cells by time	
+		times = []
+		cells = []		
+		for cell in stormTracks[track]['cells']:
+			times.append(cell['time'])
+			
+		times = sorted(times)
+		for cellTime in times:
+			for cell in stormTracks[track]['cells']:
+				if cell['time'] == cellTime:
+					cells.append(cell)
+					break
+		
+		# Calculate speed and component velocities for each cell		
+		for cell in cells:		
+			index = cells.index(cell)
+			if index == 0: 
+				cell['motion_east'] = stormTracks[track]['u']
+				cell['motion_south'] = -1 * stormTracks[track]['v']
+				
+			else:
+				prevX = cells[index - 1]['x']
+				prevY = cells[index - 1]['y']
+				prevTime = cells[index - 1]['time']
+				
+				cell['motion_east'] = (cell['x'] - prevX) / ((cell['time'] - prevTime).total_seconds())
+				cell['motion_south'] = -1 * (cell['y'] - prevY) / ((cell['time'] - prevTime).total_seconds())
+				
+			cell['speed'] = np.sqrt(cell['motion_east']**2 + cell['motion_south']**2)
+		
+		# Convert times to str for JSON
+		for cell in stormTracks[track]['cells']:
+			cell['time'] = str(cell['time'])
+			cell['start_time'] = str(cell['start_time'])
+			
+		stormTracks[track]['t0'] = str(stormTracks[track]['t0'])
+		stormTracks[track]['tend'] = str(stormTracks[track]['tend'])
+		
+		print stormTracks
+			
+		# Convert x, y back to lon, lat
+		stormTracks[track]['lon0'], stormTracks[track]['lat0'] = m(stormTracks[track]['x0'], stormTracks[track]['y0'], inverse = True)
+		stormTracks[track]['lonf'], stormTracks[track]['latf'] = m(stormTracks[track]['xf'], stormTracks[track]['yf'], inverse = True)
+		
+		# Remove data specific to this run
+		stormTracks[track].pop('x0', None)
+		stormTracks[track].pop('y0', None)
+		stormTracks[track].pop('xf', None)
+		stormTracks[track].pop('yf', None)
+				
+	if outType:
+		temp = 0
+	else:
+		# Print stormCells to data file
+		print 'Printing ' + str(startTime.date()) + '_' + str(endTime.date()) + '_' + 'cells.data'
+		with open(outDir + '/' + str(startTime.date()) + '_' + str(endTime.date()) + '_' + 'cells.data', 'w') as outfile:
+			json.dump(stormCells, outfile)
+	
+		outfile.close()
 
+		# Print stormTracks to data file
+		print 'Printing ' + str(startTime.date()) + '_' + str(endTime.date()) + '_' + 'tracks.data'
+		with open(outDir + '/' + str(startTime.date()) + '_' + str(endTime.date()) + '_' + 'tracks.data', 'w') as outfile:
+			json.dump(stormCells, outfile)
+	
+		outfile.close()
+
+	print '\n\nBest Track has completed succesfully!\n\n'
+	
 	

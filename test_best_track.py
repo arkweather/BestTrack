@@ -277,7 +277,7 @@ if __name__ == '__main__':
 					for cell in cells:
 						cell = cell.split()
 						cellID = totNumCells
-						stormCells[cellID] = {'time':fileDate, 'lat':float(cell[0]), 'lon':float(cell[1]), 'track':str(cell[9]) + '_' + str(fileDate.date())} 
+						stormCells[cellID] = {'time':fileDate, 'lat':float(cell[0]), 'lon':float(cell[1]), 'track':str(cell[9]) + '_' + str(fileDate.date()), 'refl':float(cell[5])} 
 						totNumCells += 1
 					
 	print '\nNumber of files: ' + str(numTrackTimes)
@@ -323,10 +323,12 @@ if __name__ == '__main__':
 			# Sort cells in each track by time and then get lat lon pairs for each cell
 			for track in stormTracks:
 				times = []
+				refl = []
 				finalCellsX = []
 				finalCellsY = []
 				for cell in stormTracks[track]['cells']:
 					times.append(cell['time'])
+					refl.append(cell['refl'])
 				#print times
 				#break
 				times = sorted(times)
@@ -336,8 +338,11 @@ if __name__ == '__main__':
 							finalCellsX.append(m(cell['lon'], cell['lat'])[0])
 							finalCellsY.append(m(cell['lon'], cell['lat'])[1])
 							break
-							
-				m.plot(finalCellsX, finalCellsY, color = 'r', linewidth = 1)			
+				
+				if max(refl) >= 50: color = 'r'
+				elif max(refl) >= 40 and max(refl) < 50: color = 'y'
+				else: color = 'g'	
+				m.plot(finalCellsX, finalCellsY, color = color, linewidth = 2)			
 			
 			plt.show()
 
