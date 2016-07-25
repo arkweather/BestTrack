@@ -62,7 +62,7 @@ STARS = '\n' + '*' * 80 + '\n\n'
 ## Retrieve the user-speficified command line arguments
 def getOptions():
 	
-	# Load default values
+	# Load default values from config file
 	try:
 		f = open('best_track.config')
 		lines = f.readlines()
@@ -212,6 +212,8 @@ def checkArgs(args):
 		print 'Unable to locate output directory. The specified location will be created.'
 		os.makedirs(outDir)
 	
+	# TODO Automatic saving of maps is disabled for now.
+
 #	# Handle map creation variables
 #	if mapResults:
 #		

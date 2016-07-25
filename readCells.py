@@ -1,14 +1,30 @@
+##
+# @file Helper set of scripts to read in and parse multiple types of input sources.
+
 import sys
 import os
 import datetime
 from bs4 import BeautifulSoup
 from shapely.geometry.polygon import Polygon
 
+## Determines the user-specified file type and parses it accordingly
+## @param ftype The file type to process: segmotion, probsevere, or ryan
+## @param inDir The input directory
+## @param inSuffix The lowest subdirectory of the input directory
+## @param startTime The earliest time to process
+## @param endTime The latest time to process
+## @returns [stormCells, totNumCells, numTrackTimes] - Dictionary of all storm cells, the number of cells, and the number of files
 def read(ftype, inDir, inSuffix, startTime, endTime):
 	if ftype == 'ryan': return readRyan(inDir, inSuffix, startTime, endTime)	
 	elif ftype == 'segmotion': return readSegmotion(inDir, inSuffix, startTime, endTime)
 	elif ftype == 'probsevere': return readProbSevere(inDir, inSuffix, startTime, endTime)
-	
+
+## Parses post-processed segmotion files (.data) from Ryan's original code
+## @param inDir The input directory
+## @param inSuffix The lowest subdirectory of the input directory
+## @param startTime The earliest time to process
+## @param endTime The latest time to process
+## @returns [stormCells, totNumCells, numTrackTimes] - Dictionary of all storm cells, the number of cells, and the number of files	
 def readRyan(inDir, inSuffix, startTime, endTime):
 	numTrackTimes = 0
 	totNumCells = 0
@@ -56,7 +72,13 @@ def readRyan(inDir, inSuffix, startTime, endTime):
 						
 	return [stormCells, totNumCells, numTrackTimes]
 	
-	
+
+## Parses raw segmotion .xml files
+## @param inDir The input directory
+## @param inSuffix The lowest subdirectory of the input directory
+## @param startTime The earliest time to process
+## @param endTime The latest time to process
+## @returns [stormCells, totNumCells, numTrackTimes] - Dictionary of all storm cells, the number of cells, and the number of files	
 def readSegmotion(inDir, inSuffix, startTime, endTime):
 	numTrackTimes = 0
 	totNumCells = 0
@@ -105,6 +127,12 @@ def readSegmotion(inDir, inSuffix, startTime, endTime):
 	return [stormCells, totNumCells, numTrackTimes]
 	
 
+## Parses probSevere .ascii files
+## @param inDir The input directory
+## @param inSuffix The lowest subdirectory of the input directory
+## @param startTime The earliest time to process
+## @param endTime The latest time to process
+## @returns [stormCells, totNumCells, numTrackTimes] - Dictionary of all storm cells, the number of cells, and the number of files
 def readProbSevere(inDir, inSuffix, startTime, endTime):
 	numTrackTimes = 0
 	totNumCells = 0
