@@ -62,23 +62,52 @@ STARS = '\n' + '*' * 80 + '\n\n'
 ## Retrieve the user-speficified command line arguments
 def getOptions():
 	
+	# Load default values
+	try:
+		f = open('best_track.config')
+		lines = f.readlines()
+		f.close()
+		
+		inDir = lines[9].split(' = ')[1].strip()
+		suf = lines[11].split(' = ')[1].strip()
+		ftype = lines[13].split(' = ')[1].strip()
+		bd = float(lines[15].split(' = ')[1])
+		bt = float(lines[17].split(' = ')[1])
+		jt = float(lines[19].split(' = ')[1])
+		jd = float(lines[21].split(' = ')[1])
+		mc = int(lines[23].split(' = ')[1])
+		mi = int(lines[25].split(' = ')[1])
+		bi = int(lines[27].split(' = ')[1])
+		outDir = lines[29].split(' = ')[1].strip()
+		ts = bool(int(lines[31].split(' = ')[1]))
+		m = bool(int(lines[33].split(' = ')[1]))
+		
+	except IOError:
+		print 'Unable to find best_track.config.  Please make sure the file is in the same directory as best_track.py\n\n'
+		sys.exit(2)
+	
+	except IndexError:
+		print 'A value is missing in best_track.config or the file has become corrupted.  See the README file for more info.\n\n'
+		sys.exit(2)
+		
+	
 	# Define legal command arguments
 	parser = argparse.ArgumentParser()
 	parser.add_argument('start_time', type = str, metavar = 'start_time', help = 'Start time in yyyy-mm-dd-hhmmss, or yyyy-mm-dd, etc')
 	parser.add_argument('end_time', type = str, metavar = 'end_time', help = 'End time in yyyy-mm-dd-hhmmss, or yyyy-mm-dd, etc')
-	parser.add_argument('-i', '--input_dir', type = str, metavar = '', default = 'segmotion_files4david', help = 'Location of source files')
-	parser.add_argument('-s', '--dir_suffix', type = str, metavar = '', default = 'smooth02_30dBZ', help = 'Name of last subdirectory for source files')
-	parser.add_argument('-t', '--type', type = str, metavar = '', default = 'segmotion', help = 'Type of input data: segmotion (.xml), probsevere (.ascii), or ryan (.data)')
-	parser.add_argument('-bd', '--buffer_dist', type = float, metavar = '', default = 10., help = 'Buffer distance between storm cell and Theil-Sen trajectory (km)')
-	parser.add_argument('-bt', '--buffer_time', type = float, metavar = '', default = 11., help = 'Buffer time for joining two Theil-Sen trajectories (min)')
-	parser.add_argument('-jt', '--join_time', type = float, metavar = '', default = 16., help = 'Time threshold to join two or more storm tracks (min)')
-	parser.add_argument('-jd', '--join_dist', type = float, metavar = '', default = 50., help = 'Distance threshold to join two or more storm tracks (km)')
-	parser.add_argument('-mc', '--min_cells', type = int, metavar = '', default = 3, help = 'Minimum number of storm cells per track')
-	parser.add_argument('-mi', '--main_iters', type = int, metavar = '', default = 5, help = 'Number of main iterations')
-	parser.add_argument('-bi', '--breakup_iters', type = int, metavar = '', default = 3, help = 'Number of breakup iterations')
-	parser.add_argument('-o', '--out_dir', type = str, metavar = '', default = 'tracks', help = 'Name of output directory for new tracking files')
-	parser.add_argument('-ts', '--time_step', action = 'store_true', help = 'Toggle file creation for each time step. Default is to combine all times into one file.')
-	parser.add_argument('-m', '--map', action = 'store_true', help = 'Toggle map creation')
+	parser.add_argument('-i', '--input_dir', type = str, metavar = '', default = inDir, help = 'Location of source files')
+	parser.add_argument('-s', '--dir_suffix', type = str, metavar = '', default = suf, help = 'Name of last subdirectory for source files')
+	parser.add_argument('-t', '--type', type = str, metavar = '', default = ftype, help = 'Type of input data: segmotion (.xml), probsevere (.ascii), or ryan (.data)')
+	parser.add_argument('-bd', '--buffer_dist', type = float, metavar = '', default = bd, help = 'Buffer distance between storm cell and Theil-Sen trajectory (km)')
+	parser.add_argument('-bt', '--buffer_time', type = float, metavar = '', default = bt, help = 'Buffer time for joining two Theil-Sen trajectories (min)')
+	parser.add_argument('-jt', '--join_time', type = float, metavar = '', default = jt, help = 'Time threshold to join two or more storm tracks (min)')
+	parser.add_argument('-jd', '--join_dist', type = float, metavar = '', default = jd, help = 'Distance threshold to join two or more storm tracks (km)')
+	parser.add_argument('-mc', '--min_cells', type = int, metavar = '', default = mc, help = 'Minimum number of storm cells per track')
+	parser.add_argument('-mi', '--main_iters', type = int, metavar = '', default = mi, help = 'Number of main iterations')
+	parser.add_argument('-bi', '--breakup_iters', type = int, metavar = '', default = bi, help = 'Number of breakup iterations')
+	parser.add_argument('-o', '--out_dir', type = str, metavar = '', default = outDir, help = 'Name of output directory for new tracking files')
+	parser.add_argument('-ts', '--time_step', action = 'store_true', default = ts, help = 'Toggle file creation for each time step. Default is to combine all times into one file.')
+	parser.add_argument('-m', '--map', action = 'store_true', default = m, help = 'Toggle map creation')
 	
 	args = parser.parse_args()
 	return args
