@@ -2,10 +2,12 @@ import sys
 import os
 import datetime
 from bs4 import BeautifulSoup
+from shapely.geometry.polygon import Polygon
 
 def read(ftype, inDir, inSuffix, startTime, endTime):
 	if ftype == 'ryan': return readRyan(inDir, inSuffix, startTime, endTime)	
 	elif ftype == 'segmotion': return readSegmotion(inDir, inSuffix, startTime, endTime)
+	elif ftype == 'probsevere': return readProbSevere(inDir, inSuffix, startTime, endTime)
 	
 def readRyan(inDir, inSuffix, startTime, endTime):
 	numTrackTimes = 0
@@ -49,8 +51,7 @@ def readRyan(inDir, inSuffix, startTime, endTime):
 						cell = cell.split()
 						cellID = totNumCells
 						stormCells[cellID] = {'time':fileDate, 'lat':float(cell[0]), 'lon':float(cell[1]), 'latr':float(cell[3]), 
-												'lonr':float(cell[4]), 'orientation':float(cell[8]), 'track':str(cell[9]) + '_' + str(fileDate.date()), 
-												'refl':float(cell[5])} 
+												'lonr':float(cell[4]), 'orientation':float(cell[8]), 'track':str(cell[9]) + '_' + str(fileDate.date())} 
 						totNumCells += 1
 						
 	return [stormCells, totNumCells, numTrackTimes]
@@ -99,12 +100,67 @@ def readSegmotion(inDir, inSuffix, startTime, endTime):
 						stormCells[cellID] = {'time': time, 'latr': latr, 'lat': lat, 'lonr': lonr, 'lon': lon, 
 												'orientation': orientation, 'track': track + '_' + str(fileDate.date())}
 						totNumCells += 1
-						
-										
+														
 						
 	return [stormCells, totNumCells, numTrackTimes]
 	
+
+def readProbSevere(inDir, inSuffix, startTime, endTime):
+	numTrackTimes = 0
+	totNumCells = 0
+	stormCells = {} 
 	
+	# Read in Segmotion files
+	for root, dirs, files in os.walk(inDir):
+		if files and not dirs and os.path.split(root)[-1] == inSuffix:
+			for trackFile in files:
+				if trackFile.endswith('.ascii'):
+					
+					# Check if file falls in date range
+					try:
+						date = str(trackFile).split('.')[0].split('_')[3]
+						time = str(trackFile).split('.')[0].split('_')[4]
+						fileDate = datetime.datetime.strptime(date + '_' + time, '%Y%m%d_%H%M%S')
+					except ValueError:
+						print 'File ' + str(trackFile) + ' has an invalid name.  Expected format SSEC_AWIPS_PROBSEVERE_YYYYMMDD_hhmmss.ascii...'
+						continue
+					if not startTime <= fileDate < endTime:
+						continue
+						
+					# Open file
+					f = open(root + '/' + trackFile)
+					lines = f.readlines()
+					f.close()
+					
+					print trackFile
+					numTrackTimes += 1
+					
+					for line in lines:
+						if line.startswith('Valid:'): continue
+						data = str(line).split(':')
+						lats = map(float, data[7].split(',')[0::2])
+						lons = map(float, data[7].split(',')[1::2])
+						track = data[8]						
+						
+						latr = (max(lats) - min(lats)) / 2.
+						lonr = abs(max(lons) - min(lons)) / 2.
+						
+						# Calculate centroid
+						points = []
+						for i in range(0, len(lats)):
+							points.append((lons[i], lats[i]))
+						poly = Polygon(points)
+						
+						lon = poly.centroid.x
+						lat = poly.centroid.y
+						
+						cellID = totNumCells
+						stormCells[cellID] = {'time': fileDate, 'latr': latr, 'lat': lat, 'lonr': lonr, 'lon': lon, 
+												'orientation': 'NaN', 'track': track + '_' + str(fileDate.date())}
+						totNumCells += 1
+						
+						
+	return [stormCells, totNumCells, numTrackTimes]
 	
 	
 	

@@ -1,5 +1,5 @@
 ## @package best_track
-# Concatenates storm tracks from w2segmotionll.
+# Concatenates storm tracks from w2segmotionll, probSevere, and post-processed .data (Ryan) files.
 #
 # This package is approximately equivalent to w2besttrack with the 
 # potential for additional features and greater flexibility.
@@ -31,8 +31,8 @@ MAX_BUFFER_DIST = 20     # Buffer distance [km].  0.1 deg in w2besttrack.
 MAX_BUFFER_TIME = 21	 # Buffer time [min].  10 min in w2besttrack.
 MAX_JOIN_TIME = 21		 # Buffer time for joining Theil-Sen trajectories [min].  15 min in w2besttrack.
 MAX_JOIN_DIST = 70		 # Buffer distance for joining Theil-Sen trajectories [km].
-MIN_MIN_CELLS = 2        # Min # storm cells per track.
-MAX_MIN_CELLS = 12       # Min # storm cells per track.
+MIN_MIN_CELLS = 2        # Min min number storm cells per track.
+MAX_MIN_CELLS = 12       # Max min number storm cells per track.
 MIN_ITERS = 3            # Number of outside iterations.
 MAX_ITERS = 25           # Number of outside iterations.
 MIN_BREAKUP_ITERS = 1    # Number of break-up iterations.
@@ -42,19 +42,14 @@ MAX_BREAKUP_ITERS = 5    # Number of break-up iterations.
 ## @name Mapping constants
 ## @{
 MIN_LAT = 20
-MAX_LAT = 55
-MIN_LON = 230
-MAX_LON = 300
-NUM_XTICKS = 8
-NUM_YTICKS = 10
+MAX_LAT = 51
+MIN_LON = -119
+MAX_LON = -62
 
 BEFORE_WIDTH = 4
 AFTER_WIDTH = 2
-FONT_SIZE = 12
-
-IMAGE_RES = 600
-IMAGE_RES_STR = str(IMAGE_RES)
 ## @}
+FONT_SIZE = 12
 
 ## @name Other constants
 ## @{
@@ -73,7 +68,7 @@ def getOptions():
 	parser.add_argument('end_time', type = str, metavar = 'end_time', help = 'End time in yyyy-mm-dd-hhmmss, or yyyy-mm-dd, etc')
 	parser.add_argument('-i', '--input_dir', type = str, metavar = '', default = 'segmotion_files4david', help = 'Location of source files')
 	parser.add_argument('-s', '--dir_suffix', type = str, metavar = '', default = 'smooth02_30dBZ', help = 'Name of last subdirectory for source files')
-	parser.add_argument('-t', '--type', type = str, metavar = '', default = 'ryan', help = 'Type of input data: segmotion (.xml), probsevere (.ascii), or ryan (.data)')
+	parser.add_argument('-t', '--type', type = str, metavar = '', default = 'segmotion', help = 'Type of input data: segmotion (.xml), probsevere (.ascii), or ryan (.data)')
 	parser.add_argument('-bd', '--buffer_dist', type = float, metavar = '', default = 10., help = 'Buffer distance between storm cell and Theil-Sen trajectory (km)')
 	parser.add_argument('-bt', '--buffer_time', type = float, metavar = '', default = 11., help = 'Buffer time for joining two Theil-Sen trajectories (min)')
 	parser.add_argument('-jt', '--join_time', type = float, metavar = '', default = 16., help = 'Time threshold to join two or more storm tracks (min)')
@@ -84,11 +79,6 @@ def getOptions():
 	parser.add_argument('-o', '--out_dir', type = str, metavar = '', default = 'tracks', help = 'Name of output directory for new tracking files')
 	parser.add_argument('-ts', '--time_step', action = 'store_true', help = 'Toggle file creation for each time step. Default is to combine all times into one file.')
 	parser.add_argument('-m', '--map', action = 'store_true', help = 'Toggle map creation')
-	parser.add_argument('-lat', '--map_lat', type = float, nargs = '*', metavar = '', default = None, help = 'A list of latitude ranges seperated by a space. 22 25 26 27 would produce ' +
-																											'ranges [22, 25], [26, 27] for mapping')
-	parser.add_argument('-lon', '--map_lon', type = float, nargs = '*', metavar = '', default = None, help = 'A list of longitude (E) ranges seperated by a space. 250 255 260 270 would ' +
-																											'produce ranges [250, 255], [260, 270] for mapping')
-	parser.add_argument('-md', '--map_dir', type = str, metavar = '', default = 'maps', help = 'Output directory for maps')
 	
 	args = parser.parse_args()
 	return args
@@ -111,9 +101,6 @@ def checkArgs(args):
 	breakIters = args['breakup_iters']
 	outDir = args['out_dir']
 	mapResults = args['map']
-	lats = args['map_lat']
-	lons = args['map_lon']
-	mapDir = args['map_dir']
 	
 	# Time Checks
 	stimeDetail = len(startTime.split('-'))
@@ -153,7 +140,7 @@ def checkArgs(args):
 	else: print 'Name of last subdirectory for original tracking files:  ' + inSuffix
 	
 	types = ['segmotion', 'probsevere', 'ryan']
-	if fType not in types:
+	if fType.lower() not in types:
 		print 'ERROR: Invalid file type specified. Expected segmotion, probsevere, or ryan.  Instead got: ' + fType + '\n'
 	else: print 'Data file type: ' + fType
 	
@@ -196,57 +183,57 @@ def checkArgs(args):
 		print 'Unable to locate output directory. The specified location will be created.'
 		os.makedirs(outDir)
 	
-	# Handle map creation variables
-	if mapResults:
-		
-		# Latitude ranges
-		if lats == None or lats == []:
-			lats = [MIN_LAT, MAX_LAT]
-		elif len(lats) % 2 != 0:
-			print '\nInvalid number of latitudes.  There must be an even number of latitudes. Instead ' + str(len(lats)) + ' were given.\n'
-			sys.exit(2)
-		for lat in lats:
-			if lat < MIN_LAT or lat > MAX_LAT:
-				print '\nERROR: Latitude must be in range [' + str(MIN_LAT) + ', ' + str(MAX_LAT) + '].  Instead got: ' + lat + '\n'
-				sys.exit(2)
-			elif lats.index(lat) % 2 == 0 and abs(lat - lats[lats.index(lat) + 1]) <= TOLERANCE:
-				print '\nERROR: Each set of ranges must contain different values.  One row contains the same value twice.\n'
-				sys.exit(2)
-				
-		print '\nThis will create maps for the following latitude ranges: '
-		for i in range (0, len(lats), 2):
-			print str(lats[i]) + '\t' + str(lats[i+1])
-		
-		
-		# Longitude ranges
-		if lons == None or lons == []:
-			lons = [MIN_LON, MAX_LON]
-		elif len(lons) % 2 != 0:
-			print '\nERROR: Invalid number of longitudes.  There must be an even number of longitudes. Instead ' + str(len(lons)) + ' were given.\n'
-			sys.exit(2)
-		elif len(lons) != len(lats):
-			print '\nERROR: The number of longitudes must match the number of latitudes.\n'
-			sys.exit(2)
-		for lon in lons:
-			if lon < MIN_LON or lon > MAX_LON:
-				print '\nERROR: Longitude must be in range [' + str(MIN_LON) + ', ' + str(MAX_LON) + '].  Instead got: ' + lon + '\n'
-				sys.exit(2)
-			elif lons.index(lon) % 2 == 0 and abs(lon - lons[lons.index(lon) + 1]) <= TOLERANCE:
-				print '\nERROR: Each set of ranges must contain different values.  One row contains the same value twice.\n'
-				sys.exit(2)
-				
-		print '\nThis will create maps for the following longitude ranges: '
-		for i in range (0, len(lons), 2):
-			print str(lons[i]) + '\t' + str(lons[i+1])
-			
-		
-		# Map output directory
-		if not os.path.isdir(mapDir):
-			print '\nERROR: ' + mapDir + ' does not exist or is not a directory.'
-			sys.exit(2)
-		else: print '\nMaps will be saved in ' + mapDir
-		
-	else: print 'Mapping disabled'
+#	# Handle map creation variables
+#	if mapResults:
+#		
+#		# Latitude ranges
+#		if lats == None or lats == []:
+#			lats = [MIN_LAT, MAX_LAT]
+#		elif len(lats) % 2 != 0:
+#			print '\nInvalid number of latitudes.  There must be an even number of latitudes. Instead ' + str(len(lats)) + ' were given.\n'
+#			sys.exit(2)
+#		for lat in lats:
+#			if lat < MIN_LAT or lat > MAX_LAT:
+#				print '\nERROR: Latitude must be in range [' + str(MIN_LAT) + ', ' + str(MAX_LAT) + '].  Instead got: ' + lat + '\n'
+#				sys.exit(2)
+#			elif lats.index(lat) % 2 == 0 and abs(lat - lats[lats.index(lat) + 1]) <= TOLERANCE:
+#				print '\nERROR: Each set of ranges must contain different values.  One row contains the same value twice.\n'
+#				sys.exit(2)
+#				
+#		print '\nThis will create maps for the following latitude ranges: '
+#		for i in range (0, len(lats), 2):
+#			print str(lats[i]) + '\t' + str(lats[i+1])
+#		
+#		
+#		# Longitude ranges
+#		if lons == None or lons == []:
+#			lons = [MIN_LON, MAX_LON]
+#		elif len(lons) % 2 != 0:
+#			print '\nERROR: Invalid number of longitudes.  There must be an even number of longitudes. Instead ' + str(len(lons)) + ' were given.\n'
+#			sys.exit(2)
+#		elif len(lons) != len(lats):
+#			print '\nERROR: The number of longitudes must match the number of latitudes.\n'
+#			sys.exit(2)
+#		for lon in lons:
+#			if lon < MIN_LON or lon > MAX_LON:
+#				print '\nERROR: Longitude must be in range [' + str(MIN_LON) + ', ' + str(MAX_LON) + '].  Instead got: ' + lon + '\n'
+#				sys.exit(2)
+#			elif lons.index(lon) % 2 == 0 and abs(lon - lons[lons.index(lon) + 1]) <= TOLERANCE:
+#				print '\nERROR: Each set of ranges must contain different values.  One row contains the same value twice.\n'
+#				sys.exit(2)
+#				
+#		print '\nThis will create maps for the following longitude ranges: '
+#		for i in range (0, len(lons), 2):
+#			print str(lons[i]) + '\t' + str(lons[i+1])
+#			
+#		
+#		# Map output directory
+#		if not os.path.isdir(mapDir):
+#			print '\nERROR: ' + mapDir + ' does not exist or is not a directory.'
+#			sys.exit(2)
+#		else: print '\nMaps will be saved in ' + mapDir
+#		
+#	else: print 'Mapping disabled'
 
 ## Groups cells with the same track ID into a track dictionary
 ## @param stormCells Dictionary of storm cells
@@ -347,11 +334,11 @@ def theil_sen_batch(stormTracks):
 	return stormTracks
 		
 	
-######################################################################################################################
+#====================================================================================================================#
 #                                                                                                                    #
 #  Main Method - Handle user input, read in files, then run calculations                                             #
 #                                                                                                                    #
-######################################################################################################################
+#====================================================================================================================#
 
 if __name__ == '__main__':
 	args = vars(getOptions())
@@ -372,7 +359,7 @@ if __name__ == '__main__':
 	endTime = args['end_time']
 	inDir = args['input_dir']
 	inSuffix = args['dir_suffix']
-	fType = args['type']
+	fType = args['type'].lower()
 	bufferDist = args['buffer_dist']
 	bufferTime = timedelta(minutes = int(args['buffer_time']))
 	joinTime = timedelta(minutes = int(args['join_time']))
@@ -383,9 +370,6 @@ if __name__ == '__main__':
 	outDir = args['out_dir']
 	outType = args['time_step']
 	mapResults = args['map']
-	lats = args['map_lat']
-	lons = args['map_lon']
-	mapDir = args['map_dir']
 	## @}
 	
 	# If the times check out, convert to datetime objects
@@ -413,11 +397,11 @@ if __name__ == '__main__':
 	
 	print STARS
 	
-	####################################################################################################################
+	#==================================================================================================================#
 	#                                                                                                                  #
 	#  Read in the files and process data                                                                              #
 	#                                                                                                                  #
-	####################################################################################################################
+	#==================================================================================================================#
 	
 	# Check for root directory:
 	print 'Reading files:'
@@ -480,11 +464,11 @@ if __name__ == '__main__':
 	print 'Ratio between x-y distances and lat-lon distances: ' + str(distanceRatio)
 	print DASHES
 	
-	####################################################################################################################
+	#==================================================================================================================#
 	#                                                                                                                  #
 	#  Calculations!                                                                                                   #
 	#                                                                                                                  #
-	####################################################################################################################
+	#==================================================================================================================#
 	
 	print 'Beginning Calculations...'
 	REPORT_EVERY = 1000
@@ -493,8 +477,6 @@ if __name__ == '__main__':
 	# Main iterations
 	for i in range(0, mainIters):
 		print '\nMain iteration: ' + str(i + 1)
-		
-		anyChanges = False
 		
 		# Breakup iterations
 		for j in range(0, breakIters):
@@ -526,9 +508,6 @@ if __name__ == '__main__':
 					# Preference individual cells to join other tracks
 					if len(stormTracks[track]['cells']) < 2 and track == stormCells[cell]['track']:
 						continue
-						
-					# TODO test
-					#if len(stormTracks[track]['cells']) > 3: continue
 					
 					if stormTracks[track]['u'] == 'NaN':
 						xPoint = stormTracks[track]['x0']
@@ -539,7 +518,6 @@ if __name__ == '__main__':
 					
 					dist = np.sqrt((cellX - xPoint)**2 + (cellY - yPoint)**2)
 					dist = dist * distanceRatio # Convert from x,y to km
-					#print str(dist)
 					
 					# Force cells to be assigned to a track (not NaN)
 					# If need be they'll be weeded out in the tie break step later
@@ -559,12 +537,8 @@ if __name__ == '__main__':
 			print 'All cells have been assigned!'
 			print 'Number of modified cells: ' + str(changedCells)
 			
-			# TODO: Check for changes
-			#newChanges = (not scLast == stormCells)
-			#anyChanges = newChanges or anyChanges
-			#if not newChanges:
-			#	print 'No new changes. Ending the breakup step.'
-			#	break
+			# Stop if there are no changes
+			if changedCells == 0: break
 				
 		# ------ End of breakup iteration ------ #
 			
@@ -584,6 +558,7 @@ if __name__ == '__main__':
 		removeTracks = []
 		tracks = sorted(stormTracks.keys())
 		totNumTracks = len(tracks)
+		merged = 0
 		
 		for j in range(0, len(tracks)):
 			track1 = tracks[j]
@@ -657,9 +632,10 @@ if __name__ == '__main__':
 					
 			if j % REPORT_EVERY == 0:
 				print '......' + str(j) + ' of ' + str(totNumTracks) + ' processed for joining......'
-				
+		
+		merged = len(removeTracks)		
 		print 'All tracks have been joined if necessary!'
-		print 'Merged ' + str(len(removeTracks)) + ' tracks\n'
+		print 'Merged ' + str(merged) + ' tracks\n'
 		
 		# ------ End of Joining process ------ #
 		
@@ -720,6 +696,11 @@ if __name__ == '__main__':
 				
 		print 'All tracks have been processed for tie breaks'
 		print 'Number of tie breaks: ' + str(breaks)
+		
+		# Quit iterating if no more changes
+		if breaks == 0 and merged == 0 and changedCells == 0:
+			print 'No additional iterations necessary. Breaking early...'
+			break
 					
 		# ------ End of Main iteration ------ #
 		
@@ -745,11 +726,11 @@ if __name__ == '__main__':
 	print DASHES
 	
 	
-	####################################################################################################################
+	#==================================================================================================================#
 	#                                                                                                                  #
 	#  Maps!                                                                                                           #
 	#                                                                                                                  #
-	####################################################################################################################		
+	#==================================================================================================================#		
 	
 	if mapResults:
 		print 'Preparing to plot maps...'
@@ -759,89 +740,80 @@ if __name__ == '__main__':
 		stOrigin = theil_sen_batch(stOrigin)
 		
 		# Handle empty specifications
-		if lats == None or lats == []:
-			lats = [MIN_LAT, MAX_LAT]
-			
-		if lons == None or lons == []:
-			lons = [MIN_LON, MAX_LON]
+		lats = [MIN_LAT, MAX_LAT]
+		lons = [MIN_LON, MAX_LON]
 			
 		
 		# Generate each map
-		for i in range(0, len(lats), 2):
-			print 'Plotting figure ' + str((i / 2) + 1) + ' of ' + str(len(lats) / 2) + '...'
+		print 'Plotting figure...'
+		
+		fig = plt.figure( 1)
+		
+		theseLats = lats
+		theseLons = lons
+		
+		meanLat = np.mean(theseLats)
+		meanLon = np.mean(theseLons)
+		
+		m = Basemap(llcrnrlon=-119, llcrnrlat=22, urcrnrlon=-64,
+					    urcrnrlat=49, projection='lcc', lat_1=33, lat_2=45,
+					    lon_0=-95, resolution='i', area_thresh=10000)
+        
+		# Read in shapefiles
+		m.readshapefile('counties/c_11au16', name = 'counties', drawbounds = True, color = '#C9CFD1')
+		m.readshapefile('States_Shapefiles/s_11au16', name = 'states', drawbounds = True)
+		m.readshapefile('province/province', name = 'canada', drawbounds = True)
+        
+		# Sort cells in each original track by time and then get lat lon pairs for each cell
+		for track in stOrigin:
+			times = []
+			originCellsX = []
+			originCellsY = []
 			
-			fig = plt.figure((i / 2) + 1, figsize = (1920 / 96., 1080 / 96.), dpi = 96)
-			
-			theseLats = [lats[i], lats[i+1]]
-			theseLons = [lons[i], lons[i+1]]
-			
-			meanLat = np.mean(theseLats)
-			meanLon = np.mean(theseLons)
-			
-			m = Basemap(llcrnrlon = min(theseLons), llcrnrlat = min(theseLats), urcrnrlon = max(theseLons), urcrnrlat = max(theseLats), 
-						projection = 'aeqd', lat_0 = meanLat, lon_0 = meanLon)
-            
-			# Read in shapefiles
-			m.readshapefile('States_Shapefiles/s_11au16', name = 'states', drawbounds = True)
-			m.readshapefile('province/province', name = 'canada', drawbounds = True)			
-            
-			# Sort cells in each original track by time and then get lat lon pairs for each cell
-			for track in stOrigin:
-				times = []
-				originCellsX = []
-				originCellsY = []
-				
+			for cell in stOrigin[track]['cells']:
+				times.append(cell['time'])
+			times = sorted(times)
+			for cellTime in times:
 				for cell in stOrigin[track]['cells']:
-					times.append(cell['time'])
-				times = sorted(times)
-				for cellTime in times:
-					for cell in stOrigin[track]['cells']:
-						if cell['time'] == cellTime:
-							originCellsX.append(m(cell['lon'], cell['lat'])[0])
-							originCellsY.append(m(cell['lon'], cell['lat'])[1])
-							break
-				
-				if len(originCellsX) < 2: m.scatter(originCellsX, originCellsY, color = 'grey', marker = 'o')		
-				else: m.plot(originCellsX, originCellsY, color = 'grey', linewidth = BEFORE_WIDTH)
-				
-			# Sort cells in each track by time and then get lat lon pairs for each cell
-			for track in stormTracks:
-				times = []
-				refl = []
-				finalCellsX = []
-				finalCellsY = []
+					if cell['time'] == cellTime:
+						originCellsX.append(m(cell['lon'], cell['lat'])[0])
+						originCellsY.append(m(cell['lon'], cell['lat'])[1])
+						break
+			
+			if len(originCellsX) < 2: m.scatter(originCellsX, originCellsY, color = 'grey', marker = 'o')		
+			else: m.plot(originCellsX, originCellsY, color = 'grey', linewidth = BEFORE_WIDTH)
+			
+		# Sort cells in each track by time and then get lat lon pairs for each cell
+		for track in stormTracks:
+			times = []
+			finalCellsX = []
+			finalCellsY = []
+			for cell in stormTracks[track]['cells']:
+				times.append(cell['time'])
+			
+			times = sorted(times)
+			for cellTime in times:
 				for cell in stormTracks[track]['cells']:
-					times.append(cell['time'])
-					try: refl.append(cell['refl'])
-					except KeyError: refl.append(50)
-				#print times
-				#break
-				times = sorted(times)
-				for cellTime in times:
-					for cell in stormTracks[track]['cells']:
-						if cell['time'] == cellTime:
-							finalCellsX.append(m(cell['lon'], cell['lat'])[0])
-							finalCellsY.append(m(cell['lon'], cell['lat'])[1])
-							break
-				
-				if max(refl) >= 50: color = 'r'
-				elif max(refl) >= 40 and max(refl) < 50: color = 'y'
-				else: color = 'g'
-				m.plot(finalCellsX, finalCellsY, color = color, linewidth = AFTER_WIDTH)			
+					if cell['time'] == cellTime:
+						finalCellsX.append(m(cell['lon'], cell['lat'])[0])
+						finalCellsY.append(m(cell['lon'], cell['lat'])[1])
+						break
 			
-			plt.show()
-			
-			# Save map to file
-			print 'Saving figure ' + mapDir + '/' + str(startTime.date()) + '_' + str(endTime.date()) + '_' + str((i/2) + 1) + '.png' + '...'
-			plt.savefig(mapDir + '/' + str(startTime.date()) + '_' + str(endTime.date()) + '_' + str((i/2) + 1) + '.png', bbox_inches = 'tight')
+			m.plot(finalCellsX, finalCellsY, color = 'r', linewidth = AFTER_WIDTH)			
+		
+		plt.show()
+		
+		# Save map to file
+		#print 'Saving figure ' + mapDir + '/' + str(startTime.date()) + '_' + str(endTime.date()) + '_' + str((i/2) + 1) + '.png' + '...'
+		#plt.savefig(mapDir + '/' + str(startTime.date()) + '_' + str(endTime.date()) + '_' + str((i/2) + 1) + '.png')
 		
 		print DASHES
 	
-	####################################################################################################################
+	#==================================================================================================================#
 	#                                                                                                                  #
 	#  Output                                                                                                          #
 	#                                                                                                                  #
-	####################################################################################################################
+	#==================================================================================================================#
 	
 	# Reset basemap for conversions		
 	print 'Preparing output...'
@@ -963,6 +935,23 @@ if __name__ == '__main__':
 			json.dump(stormTracks, outfile, sort_keys = True, indent = 0)
 	
 		outfile.close()
+		
+		# Print metadata
+		print 'Printing ' + str(startTime.date()) + '_' + str(endTime.date()) + '.meta'
+		f = open(outDir + '/' + str(startTime.date()) + '_' + str(endTime.date()) + '.meta', 'w')
+		f.write('Start Time: ' + str(startTime) + '\n')
+		f.write('End Time: ' + str(endTime) + '\n')
+		f.write('File Type: ' + fType + '\n')
+		f.write('Buffer Distance: ' + str(bufferDist) + '\n')
+		f.write('Buffer Time: ' + str(bufferTime) + '\n')
+		f.write('Join Distance: ' + str(joinDist) + '\n')
+		f.write('Join Time: ' + str(joinTime) + '\n')
+		f.write('Min Cells per Track: ' + str(minCells) + '\n')
+		f.write('Main Iterations: ' + str(mainIters) + '\n')
+		f.write('Breakup Iterations: ' + str(breakIters) + '\n')
+		f.write('Number of Cells: ' + str(totNumCells) + '\n')
+		f.write('Completed: ' + str(datetime.datetime.now()))
+		f.close()
 
 	print '\n\nBest Track has completed succesfully!\n\n'
 	
