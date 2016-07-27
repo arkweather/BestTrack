@@ -191,19 +191,19 @@ of 3 files in the output directory: ..._cells.data, ..._tracks.data, and ...meta
 Here we will describe the contents of each file:
 
         File Name:   YYYY-MM-DD_YYYY-MM-DD_cells.data
-        Attributes:  cellID                        Unique identifier for the cell
-                     age                        Age of the cell in seconds
-                     lat                        Centroid latitude
-                     lon                        Centroid longitude
-                     latr                        Latitude radius
-                     lonr                        Longitude radius
-                     motion_east                Eastward speed in m/s
-                     motion_south                Southward speed in m/s
-                     orientation                Object orientation in degrees
-                     speed                        Cell speed in m/s
-                     start_time                Start time of associated track
-                     time                        Cell valid time
-                     track                        Associated storm track
+        Attributes:  cellID               Unique identifier for the cell
+                     age                  Age of the cell in seconds
+                     lat                  Centroid latitude
+                     lon                  Centroid longitude
+                     latr                 Latitude radius
+                     lonr                 Longitude radius
+                     motion_east          Eastward speed in m/s
+                     motion_south         Southward speed in m/s
+                     orientation          Object orientation in degrees
+                     speed                Cell speed in m/s
+                     start_time           Start time of associated track
+                     time                 Cell valid time
+                     track                Associated storm track
         Structure:
                      {
                      cellID:{
@@ -225,14 +225,14 @@ Here we will describe the contents of each file:
                 *        *        *        *        *        *
                                 
         File Name:   YYYY-MM-DD_YYYY-MM-DD_tracks.data
-        Attributes:  trackID                Unique identifier for the track
-                     cells                Array of cell IDs associated with the track
-                     lat0                Starting lat of the track
-                     latf                Ending lat of the track
-                     lon0                Starting lon of the track
-                     lonf                Ending lon of the track
-                     t0                Starting time of the track
-                     tend                Ending time of the track
+        Attributes:  trackID          Unique identifier for the track
+                     cells            Array of cell IDs associated with the track
+                     lat0             Starting lat of the track
+                     latf             Ending lat of the track
+                     lon0             Starting lon of the track
+                     lonf             Ending lon of the track
+                     t0               Starting time of the track
+                     tend             Ending time of the track
                      u                Mean zonal velocity in m/s
                      v                Mean meridonal velocity in m/s
                                 
