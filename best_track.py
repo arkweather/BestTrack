@@ -269,9 +269,9 @@ def checkArgs(args):
 ## Groups cells with the same track ID into a track dictionary
 ## @param stormCells Dictionary of storm cells
 ## @returns stormTracks Dictionary of storm tracks containing storm cells {ID: [cells]}
-def find_clusters(stormCells):
+def find_clusters(stormCells, activeCells):
 	stormTracks = {}
-	for cell in stormCells:
+	for cell in activeCells:
 		track = stormCells[cell]['track']
 		if track in stormTracks:
 			stormTracks[track]['cells'].append(stormCells[cell])
@@ -401,6 +401,7 @@ if __name__ == '__main__':
 	outDir = args['out_dir']
 	outType = args['time_step']
 	mapResults = args['map']
+	bigData = False
 	## @}
 	
 	# If the times check out, convert to datetime objects
@@ -444,16 +445,22 @@ if __name__ == '__main__':
 	stormCells = data[0]
 	totNumCells = data[1]
 	numTrackTimes = data[2]
+	dates = sorted(data[3])
 					
 	print '\nNumber of files: ' + str(numTrackTimes)
-	print 'Number of storm cells: ' + str(totNumCells) + '\n'
+	print 'Total number of storm cells: ' + str(totNumCells)
 	
 	if numTrackTimes == 0:
 		print 'No valid files found for this time period.  Please check the source directory and specified dates.\n'
 		sys.exit(0)
 		
+	if numTrackTimes >= 500:
+		bigData = True
+		print 'Files will be processed in big data mode...'
+		if not outType: print 'An output file will be created for each day in the data...'
+		
 	# Project onto equidistant coord system
-	print 'Projecting storm cells onto equidistant coordinate system...'
+	print '\nProjecting storm cells onto equidistant coordinate system...'
 	
 	## @name Projection variables
 	## @{
@@ -504,321 +511,394 @@ if __name__ == '__main__':
 	print 'Beginning Calculations...'
 	REPORT_EVERY = 1000
 	scOrigin = copy.deepcopy(stormCells)
+	oldCells = []
 	
-	# Main iterations
-	for i in range(0, mainIters):
-		print '\nMain iteration: ' + str(i + 1)
+	# Run the whole thing for each date
+	# Note this will only run once if not bigData (break at end)
+	for date in dates:
+		dt = datetime.timedelta(days = 1)
+		activeCells = []
 		
-		# Breakup iterations
-		for j in range(0, breakIters):
-			
-			print '\nBreakup iteration: ' + str(j + 1)
-			print 'Finding clusters...'
-			stormTracks = find_clusters(stormCells)
-			print 'Number of clusters: ' + str(len(stormTracks))
-			
-			print 'Computing Theil-Sen fit for each cluster...'	
-			stormTracks = theil_sen_batch(stormTracks)
-			
-			# Assign cells to nearest cluster
-			print 'Assigning each cell to nearest cluster...'
-			changedCells = 0
+		# If dealing with a lot of data, only load 3 days at a time
+		if bigData:
 			for cell in stormCells:
-				cellTime = stormCells[cell]['time']
-				cellX = stormCells[cell]['x']
-				cellY = stormCells[cell]['y']
+				if stormCells[cell]['time'].date() >= date - dt and stormCells[cell]['time'].date() <= date + dt:
+					activeCells.append(cell)
+		else:
+			activeCells = stormCells.keys()
+	
+		if bigData: print 'Processing ' + str(date) + '...'
+	
+		# Main iterations
+		for i in range(0, mainIters):
+			print '\nMain iteration: ' + str(i + 1)
+		
+			# Breakup iterations
+			for j in range(0, breakIters):
+			
+				print '\nBreakup iteration: ' + str(j + 1)
+				print 'Finding clusters...'
+				stormTracks = find_clusters(stormCells, activeCells)
+				print 'Number of clusters: ' + str(len(stormTracks))
+			
+				print 'Computing Theil-Sen fit for each cluster...'	
+				stormTracks = theil_sen_batch(stormTracks)
+			
+				# Assign cells to nearest cluster
+				print 'Assigning each cell to nearest cluster...'
+				changedCells = 0
+				for cell in activeCells:
+					cellTime = stormCells[cell]['time']
+					cellX = stormCells[cell]['x']
+					cellY = stormCells[cell]['y']
 				
-				# Calculate distances
-				minDist = 1e9
-				minTrack = stormTracks[min(stormTracks)]
-				for track in stormTracks:
-					# Only compare to tracks in temporal range
-					if not (stormTracks[track]['t0'] - bufferTime <= cellTime <= stormTracks[track]['tend'] + bufferTime):
-						continue
+					# Calculate distances
+					minDist = 1e9
+					minTrack = stormTracks[min(stormTracks)]
+					for track in stormTracks:
+						# Only compare to tracks in temporal range
+						if not (stormTracks[track]['t0'] - bufferTime <= cellTime <= stormTracks[track]['tend'] + bufferTime):
+							continue
 						
-					# Preference individual cells to join other tracks
-					if len(stormTracks[track]['cells']) < 2 and track == stormCells[cell]['track']:
-						continue
+						# Preference individual cells to join other tracks
+						if len(stormTracks[track]['cells']) < 2 and track == stormCells[cell]['track']:
+							continue
 					
-					if stormTracks[track]['u'] == 'NaN':
-						xPoint = stormTracks[track]['x0']
-						yPoint = stormTracks[track]['y0']
+						if stormTracks[track]['u'] == 'NaN':
+							xPoint = stormTracks[track]['x0']
+							yPoint = stormTracks[track]['y0']
+						else:
+							xPoint = stormTracks[track]['x0'] + (stormTracks[track]['u'] * ((cellTime - stormTracks[track]['t0']).total_seconds()))
+							yPoint = stormTracks[track]['y0'] + (stormTracks[track]['v'] * ((cellTime - stormTracks[track]['t0']).total_seconds()))
+					
+						dist = np.sqrt((cellX - xPoint)**2 + (cellY - yPoint)**2)
+						dist = dist * distanceRatio # Convert from x,y to km
+					
+						# Force cells to be assigned to a track (not NaN)
+						# If need be they'll be weeded out in the tie break step later
+						if dist < minDist and track != 'NaN':
+							minDist = dist
+							minTrack = track
+						
+					if minDist <= bufferDist:
+						if minTrack != stormCells[cell]['track']: changedCells += 1
+						stormCells[cell]['track'] = minTrack
 					else:
-						xPoint = stormTracks[track]['x0'] + (stormTracks[track]['u'] * ((cellTime - stormTracks[track]['t0']).total_seconds()))
-						yPoint = stormTracks[track]['y0'] + (stormTracks[track]['v'] * ((cellTime - stormTracks[track]['t0']).total_seconds()))
+						stormCells[cell]['track'] = 'NaN'
 					
-					dist = np.sqrt((cellX - xPoint)**2 + (cellY - yPoint)**2)
-					dist = dist * distanceRatio # Convert from x,y to km
+					if activeCells.index(cell) % REPORT_EVERY == 0:
+						print '......' + str(activeCells.index(cell)) + ' of ' + str(len(activeCells)) + ' assigned......'
 					
-					# Force cells to be assigned to a track (not NaN)
-					# If need be they'll be weeded out in the tie break step later
-					if dist < minDist and track != 'NaN':
-						minDist = dist
-						minTrack = track
-						
-				if minDist <= bufferDist:
-					if minTrack != stormCells[cell]['track']: changedCells += 1
-					stormCells[cell]['track'] = minTrack
-				else:
-					stormCells[cell]['track'] = 'NaN'
-					
-				if cell % REPORT_EVERY == 0:
-					print '......' + str(cell) + ' of ' + str(totNumCells) + ' assigned......'
-					
-			print 'All cells have been assigned!'
-			print 'Number of modified cells: ' + str(changedCells)
+				print 'All cells have been assigned!'
+				print 'Number of modified cells: ' + str(changedCells)
 			
-			# Stop if there are no changes
-			if changedCells == 0: break
+				# Stop if there are no changes
+				if changedCells == 0: break
 				
-		# ------ End of breakup iteration ------ #
+			# ------ End of breakup iteration ------ #
 			
-		# Find new clusters
-		print '\nFinding new clusters after breakup...'
-		lastNumTracks = len(stormTracks)
-		stormTracks = find_clusters(stormCells)
-		print 'Original number of clusters: ' + str(lastNumTracks)
-		print 'New number of clusters: ' + str(len(stormTracks))
+			# Find new clusters
+			print '\nFinding new clusters after breakup...'
+			lastNumTracks = len(stormTracks)
+			stormTracks = find_clusters(stormCells, activeCells)
+			print 'Original number of clusters: ' + str(lastNumTracks)
+			print 'New number of clusters: ' + str(len(stormTracks))
 		
-		# Get Theil-Sen fit
-		print 'Computing Theil-Sen fit for each new cluster...'
-		stormTracks = theil_sen_batch(stormTracks)
+			# Get Theil-Sen fit
+			print 'Computing Theil-Sen fit for each new cluster...'
+			stormTracks = theil_sen_batch(stormTracks)
 		
-		# Join similar clusters
-		print 'Joining similar clusters...'
-		removeTracks = []
-		tracks = sorted(stormTracks.keys())
-		totNumTracks = len(tracks)
-		merged = 0
+			# Join similar clusters
+			print 'Joining similar clusters...'
+			removeTracks = []
+			tracks = sorted(stormTracks.keys())
+			totNumTracks = len(tracks)
+			merged = 0
 		
-		for j in range(0, len(tracks)):
-			track1 = tracks[j]
+			for j in range(0, len(tracks)):
+				track1 = tracks[j]
 			
-			# Skip tracks with only 1 cell
-			if len(stormTracks[track1]['cells']) < 2:
-				if j % REPORT_EVERY == 0: print '......' + str(j) + ' of ' + str(totNumTracks) + ' processed for joining......'
-				continue
-			if track1 == 'NaN': continue
+				# Skip tracks with only 1 cell
+				if len(stormTracks[track1]['cells']) < 2:
+					if j % REPORT_EVERY == 0: print '......' + str(j) + ' of ' + str(totNumTracks) + ' processed for joining......'
+					continue
+				if track1 == 'NaN': continue
 			
-			for k in range(0, j - 1):
-				track2 = tracks[k]
+				for k in range(0, j - 1):
+					track2 = tracks[k]
 				
-				#if len(stormTracks[track2]['cells']) < 2: continue
-				if track2 in removeTracks: continue
-				if track2 == 'NaN': continue
-				if len(stormTracks[track2]['cells']) < 2: continue
+					#if len(stormTracks[track2]['cells']) < 2: continue
+					if track2 in removeTracks: continue
+					if track2 == 'NaN': continue
+					if len(stormTracks[track2]['cells']) < 2: continue
 				
-				# Check time gap between tracks
-				if stormTracks[track1]['t0'] > stormTracks[track2]['t0']:
-					earlyIndex = track2
-					lateIndex = track1
-				else:
-					earlyIndex = track1
-					lateIndex = track2
-				timeDiff = stormTracks[lateIndex]['t0'] - stormTracks[earlyIndex]['tend']
-				if abs(timeDiff.total_seconds()) > joinTime.total_seconds: continue
+					# Check time gap between tracks
+					if stormTracks[track1]['t0'] > stormTracks[track2]['t0']:
+						earlyIndex = track2
+						lateIndex = track1
+					else:
+						earlyIndex = track1
+						lateIndex = track2
+					timeDiff = stormTracks[lateIndex]['t0'] - stormTracks[earlyIndex]['tend']
+					if abs(timeDiff.total_seconds()) > joinTime.total_seconds: continue
 				
-				# Check distance between tracks
-				x1 = stormTracks[earlyIndex]['xf']
-				y1 = stormTracks[earlyIndex]['yf']
-				x2 = stormTracks[lateIndex]['x0']
-				y2 = stormTracks[lateIndex]['y0']
+					# Check distance between tracks
+					x1 = stormTracks[earlyIndex]['xf']
+					y1 = stormTracks[earlyIndex]['yf']
+					x2 = stormTracks[lateIndex]['x0']
+					y2 = stormTracks[lateIndex]['y0']
 				
-				dist = np.sqrt((x1-x2)**2 + (y1 - y2)**2)
-				dist = dist * distanceRatio
+					dist = np.sqrt((x1-x2)**2 + (y1 - y2)**2)
+					dist = dist * distanceRatio
 				
-				# Limit track join distance
-				if dist > joinDist: continue
+					# Limit track join distance
+					if dist > joinDist: continue
 				
-				# Check velocity difference between tracks
-				u1 = stormTracks[earlyIndex]['u'] * distanceRatio # Km / s
-				v1 = stormTracks[earlyIndex]['v'] * distanceRatio # Km / s
-				u2 = stormTracks[lateIndex]['u'] * distanceRatio  # Km / s
-				v2 = stormTracks[lateIndex]['v'] * distanceRatio  # Km / s
+					# Check velocity difference between tracks
+					u1 = stormTracks[earlyIndex]['u'] * distanceRatio # Km / s
+					v1 = stormTracks[earlyIndex]['v'] * distanceRatio # Km / s
+					u2 = stormTracks[lateIndex]['u'] * distanceRatio  # Km / s
+					v2 = stormTracks[lateIndex]['v'] * distanceRatio  # Km / s
 			
-				velocityDiff = np.sqrt((u1 - u2)**2 + (v1 - v2)**2)
-				if velocityDiff > float(bufferDist) / bufferTime.total_seconds(): continue
+					velocityDiff = np.sqrt((u1 - u2)**2 + (v1 - v2)**2)
+					if velocityDiff > float(bufferDist) / bufferTime.total_seconds(): continue
 				
-				# Check if track predictions are close enough				
-				dist = []
-				for cell in stormTracks[lateIndex]['cells']:
-					xActual = cell['x']
-					yActual = cell['y']
-				
-					cellTime = cell['time']
-					xPredict = stormTracks[earlyIndex]['xf'] + (stormTracks[earlyIndex]['u'] * ((cellTime - stormTracks[earlyIndex]['tend']).total_seconds()))
-					yPredict = stormTracks[earlyIndex]['yf'] + (stormTracks[earlyIndex]['v'] * ((cellTime - stormTracks[earlyIndex]['tend']).total_seconds()))
-				
-					dist.append(np.sqrt((xPredict - xActual)**2 + (yPredict - yActual)**2) * distanceRatio)
-				
-				if np.mean(dist) > bufferDist: continue
-				
-				# If the two tracks survived the process, join them 'cause clearly they're meant to be together ;-)
-				removeTracks.append(track2)
-				for cell in stormTracks[track2]['cells']:
-					cell['track'] = track1
-					stormTracks[track1]['cells'].append(cell)
-				
-				stormTracks[track1] = theil_sen_single(stormTracks[track1])
-					
-			if j % REPORT_EVERY == 0:
-				print '......' + str(j) + ' of ' + str(totNumTracks) + ' processed for joining......'
-		
-		merged = len(removeTracks)		
-		print 'All tracks have been joined if necessary!'
-		print 'Merged ' + str(merged) + ' tracks\n'
-		
-		# ------ End of Joining process ------ #
-		
-		print 'Finding new clusters after joining...'
-		lastNumTracks = len(stormTracks)
-		stormTracks = find_clusters(stormCells)
-		stormTracks = theil_sen_batch(stormTracks)
-		print 'Original number of clusters: ' + str(lastNumTracks)
-		print 'New number of clusters: ' + str(len(stormTracks))
-		
-		# Break ties (multiple cells assigned to same cluster at same time step)
-		print '\nBreaking ties...'
-		scLast = stormCells
-		count = 0
-		breaks = 0
-		
-		for track in stormTracks:
-			if len(stormTracks[track]['cells']) < 2: 
-				if count % REPORT_EVERY == 0: print '......' + str(count) + ' of ' + str(totNumTracks) + ' tracks processed for ties......'
-				count += 1
-				continue
-			
-			# Map all cells to their times
-			times = {}
-			for cell in stormTracks[track]['cells']:
-				if cell['time'] in times:
-					times[cell['time']].append(cell)
-				else:
-					times[cell['time']] = [cell]
-					
-			# Get duplicate times
-			for thisTime in times:
-				cells = []
-				if len(times[thisTime]) > 1:
-					cells = times[thisTime]
-					
-					# Compare each cell and keep the one closest to the track
+					# Check if track predictions are close enough				
 					dist = []
-					for cell in cells:
-						cellX = cell['x']
-						cellY = cell['y']
-						xPredict = stormTracks[track]['x0'] + (stormTracks[track]['u'] * ((thisTime - stormTracks[track]['t0']).total_seconds()))
-						yPredict = stormTracks[track]['y0'] + (stormTracks[track]['v'] * ((thisTime - stormTracks[track]['t0']).total_seconds()))
-					
-						dist.append(np.sqrt((xPredict - cellX)**2 + (yPredict - cellY)**2) * distanceRatio)
-					
-					minCell = cells[dist.index(min(dist))]
-					for cell in cells:
-						if cell != minCell:
-							stormTracks[track]['cells'].remove(cell)
-							stormCells[stormCells.keys()[stormCells.values().index(cell)]]['track'] = 'NaN'
-							
-					breaks += 1
-							
-			if count % REPORT_EVERY == 0:
-				print '......' + str(count) + ' of ' + str(totNumTracks) + ' tracks processed for ties......'
-			count += 1
+					for cell in stormTracks[lateIndex]['cells']:
+						xActual = cell['x']
+						yActual = cell['y']
 				
-		print 'All tracks have been processed for tie breaks'
-		print 'Number of tie breaks: ' + str(breaks)
-		
-		# Quit iterating if no more changes
-		if breaks == 0 and merged == 0 and changedCells == 0:
-			print 'No additional iterations necessary. Breaking early...'
-			break
+						cellTime = cell['time']
+						xPredict = stormTracks[earlyIndex]['xf'] + (stormTracks[earlyIndex]['u'] * ((cellTime - stormTracks[earlyIndex]['tend']).total_seconds()))
+						yPredict = stormTracks[earlyIndex]['yf'] + (stormTracks[earlyIndex]['v'] * ((cellTime - stormTracks[earlyIndex]['tend']).total_seconds()))
+				
+						dist.append(np.sqrt((xPredict - xActual)**2 + (yPredict - yActual)**2) * distanceRatio)
+				
+					if np.mean(dist) > bufferDist: continue
+				
+					# If the two tracks survived the process, join them 'cause clearly they're meant to be together ;-)
+					removeTracks.append(track2)
+					for cell in stormTracks[track2]['cells']:
+						cell['track'] = track1
+						stormTracks[track1]['cells'].append(cell)
+				
+					stormTracks[track1] = theil_sen_single(stormTracks[track1])
 					
-		# ------ End of Main iteration ------ #
+				if j % REPORT_EVERY == 0:
+					print '......' + str(j) + ' of ' + str(totNumTracks) + ' processed for joining......'
 		
-	# Remove clusters with too few cells
-	print '\nRemoving clusters with too few cells...'
-	numRemoved = 0
-	for track in stormTracks:
-		if len(stormTracks[track]['cells']) < int(minCells):
-			for cell in stormTracks[track]['cells']:
-				cell['track'] = 'NaN'
-			numRemoved += 1
-	
-	print 'Number of removed tracks: ' + str(numRemoved + 1)
-	lastNumTracks = len(stormTracks)
-	
-	print '\nPerforming final cluster identification...'
-	stormTracks = find_clusters(stormCells)
-	stormTracks = theil_sen_batch(stormTracks)
-	stormTracks.pop('NaN', None)
-	print 'Original number of clusters: ' + str(lastNumTracks)
-	print 'New number of clusters: ' + str(len(stormTracks))
-	
-	print DASHES
-	
-	
-	#==================================================================================================================#
-	#                                                                                                                  #
-	#  Maps!                                                                                                           #
-	#                                                                                                                  #
-	#==================================================================================================================#		
-	
-	if mapResults:
-		print 'Preparing to plot maps...'
+			merged = len(removeTracks)		
+			print 'All tracks have been joined if necessary!'
+			print 'Merged ' + str(merged) + ' tracks\n'
 		
-		# Get original storm tracks
-		stOrigin = find_clusters(scOrigin)
-		stOrigin = theil_sen_batch(stOrigin)
+			# ------ End of Joining process ------ #
 		
-		# Handle empty specifications
-		lats = [MIN_LAT, MAX_LAT]
-		lons = [MIN_LON, MAX_LON]
+			print 'Finding new clusters after joining...'
+			lastNumTracks = len(stormTracks)
+			stormTracks = find_clusters(stormCells, activeCells)
+			stormTracks = theil_sen_batch(stormTracks)
+			print 'Original number of clusters: ' + str(lastNumTracks)
+			print 'New number of clusters: ' + str(len(stormTracks))
+		
+			# Break ties (multiple cells assigned to same cluster at same time step)
+			print '\nBreaking ties...'
+			count = 0
+			breaks = 0
+		
+			for track in stormTracks:
+				if len(stormTracks[track]['cells']) < 2: 
+					if count % REPORT_EVERY == 0: print '......' + str(count) + ' of ' + str(totNumTracks) + ' tracks processed for ties......'
+					count += 1
+					continue
 			
+				# Map all cells to their times
+				times = {}
+				for cell in stormTracks[track]['cells']:
+					if cell['time'] in times:
+						times[cell['time']].append(cell)
+					else:
+						times[cell['time']] = [cell]
+					
+				# Get duplicate times
+				for thisTime in times:
+					cells = []
+					if len(times[thisTime]) > 1:
+						cells = times[thisTime]
+					
+						# Compare each cell and keep the one closest to the track
+						dist = []
+						for cell in cells:
+							cellX = cell['x']
+							cellY = cell['y']
+							xPredict = stormTracks[track]['x0'] + (stormTracks[track]['u'] * ((thisTime - stormTracks[track]['t0']).total_seconds()))
+							yPredict = stormTracks[track]['y0'] + (stormTracks[track]['v'] * ((thisTime - stormTracks[track]['t0']).total_seconds()))
+					
+							dist.append(np.sqrt((xPredict - cellX)**2 + (yPredict - cellY)**2) * distanceRatio)
+					
+						minCell = cells[dist.index(min(dist))]
+						for cell in cells:
+							if cell != minCell:
+								stormTracks[track]['cells'].remove(cell)
+								stormCells[stormCells.keys()[stormCells.values().index(cell)]]['track'] = 'NaN'
+							
+						breaks += 1
+							
+				if count % REPORT_EVERY == 0:
+					print '......' + str(count) + ' of ' + str(totNumTracks) + ' tracks processed for ties......'
+				count += 1
+				
+			print 'All tracks have been processed for tie breaks'
+			print 'Number of tie breaks: ' + str(breaks)
 		
-		# Generate each map
-		print 'Plotting figure...'
+			# Quit iterating if no more changes
+			if breaks == 0 and merged == 0 and changedCells == 0:
+				print 'No additional iterations necessary. Breaking early...'
+				break
+					
+			# ------ End of Main iteration ------ #
 		
-		fig = plt.figure( 1)
-		
-		theseLats = lats
-		theseLons = lons
-		
-		meanLat = np.mean(theseLats)
-		meanLon = np.mean(theseLons)
-		
-		m = Basemap(llcrnrlon=-119, llcrnrlat=22, urcrnrlon=-64,
-					    urcrnrlat=49, projection='lcc', lat_1=33, lat_2=45,
-					    lon_0=-95, resolution='i', area_thresh=10000)
-        
-		# Read in shapefiles
-		m.readshapefile('counties/c_11au16', name = 'counties', drawbounds = True, color = '#C9CFD1')
-		m.readshapefile('States_Shapefiles/s_11au16', name = 'states', drawbounds = True)
-		m.readshapefile('province/province', name = 'canada', drawbounds = True)
-        
-		# Sort cells in each original track by time and then get lat lon pairs for each cell
-		for track in stOrigin:
-			times = []
-			originCellsX = []
-			originCellsY = []
-			
-			for cell in stOrigin[track]['cells']:
-				times.append(cell['time'])
-			times = sorted(times)
-			for cellTime in times:
-				for cell in stOrigin[track]['cells']:
-					if cell['time'] == cellTime:
-						originCellsX.append(m(cell['lon'], cell['lat'])[0])
-						originCellsY.append(m(cell['lon'], cell['lat'])[1])
-						break
-			
-			if len(originCellsX) < 2: m.scatter(originCellsX, originCellsY, color = 'grey', marker = 'o')		
-			else: m.plot(originCellsX, originCellsY, color = 'grey', linewidth = BEFORE_WIDTH)
-			
-		# Sort cells in each track by time and then get lat lon pairs for each cell
+		# Remove clusters with too few cells
+		print '\nRemoving clusters with too few cells...'
+		numRemoved = 0
 		for track in stormTracks:
+			if len(stormTracks[track]['cells']) < int(minCells):
+				for cell in stormTracks[track]['cells']:
+					cell['track'] = 'NaN'
+				numRemoved += 1
+	
+		print 'Number of removed tracks: ' + str(numRemoved + 1)
+		lastNumTracks = len(stormTracks)
+	
+		print '\nPerforming final cluster identification...'
+		stormTracks = find_clusters(stormCells, activeCells)
+		stormTracks = theil_sen_batch(stormTracks)
+		stormTracks.pop('NaN', None)
+		print 'Original number of clusters: ' + str(lastNumTracks)
+		print 'New number of clusters: ' + str(len(stormTracks))
+	
+		print DASHES
+	
+	
+		#==================================================================================================================#
+		#                                                                                                                  #
+		#  Maps!                                                                                                           #
+		#                                                                                                                  #
+		#==================================================================================================================#		
+	
+		if mapResults and not bigData:
+			print 'Preparing to plot maps...'
+		
+			# Get original storm tracks
+			stOrigin = find_clusters(scOrigin, activeCells)
+			stOrigin = theil_sen_batch(stOrigin)
+		
+			# Handle empty specifications
+			lats = [MIN_LAT, MAX_LAT]
+			lons = [MIN_LON, MAX_LON]
+			
+		
+			# Generate each map
+			print 'Plotting figure...'
+		
+			fig = plt.figure( 1)
+		
+			theseLats = lats
+			theseLons = lons
+		
+			meanLat = np.mean(theseLats)
+			meanLon = np.mean(theseLons)
+		
+			m = Basemap(llcrnrlon=-119, llcrnrlat=22, urcrnrlon=-64,
+							urcrnrlat=49, projection='lcc', lat_1=33, lat_2=45,
+							lon_0=-95, resolution='i', area_thresh=10000)
+		    
+			# Read in shapefiles
+			m.readshapefile('counties/c_11au16', name = 'counties', drawbounds = True, color = '#C9CFD1')
+			m.readshapefile('States_Shapefiles/s_11au16', name = 'states', drawbounds = True)
+			m.readshapefile('province/province', name = 'canada', drawbounds = True)
+		    
+			# Sort cells in each original track by time and then get lat lon pairs for each cell
+			for track in stOrigin:
+				times = []
+				originCellsX = []
+				originCellsY = []
+			
+				for cell in stOrigin[track]['cells']:
+					times.append(cell['time'])
+				times = sorted(times)
+				for cellTime in times:
+					for cell in stOrigin[track]['cells']:
+						if cell['time'] == cellTime:
+							originCellsX.append(m(cell['lon'], cell['lat'])[0])
+							originCellsY.append(m(cell['lon'], cell['lat'])[1])
+							break
+			
+				if len(originCellsX) < 2: m.scatter(originCellsX, originCellsY, color = 'grey', marker = 'o')		
+				else: m.plot(originCellsX, originCellsY, color = 'grey', linewidth = BEFORE_WIDTH)
+			
+			# Sort cells in each track by time and then get lat lon pairs for each cell
+			for track in stormTracks:
+				times = []
+				finalCellsX = []
+				finalCellsY = []
+				for cell in stormTracks[track]['cells']:
+					times.append(cell['time'])
+			
+				times = sorted(times)
+				for cellTime in times:
+					for cell in stormTracks[track]['cells']:
+						if cell['time'] == cellTime:
+							finalCellsX.append(m(cell['lon'], cell['lat'])[0])
+							finalCellsY.append(m(cell['lon'], cell['lat'])[1])
+							break
+			
+				m.plot(finalCellsX, finalCellsY, color = 'r', linewidth = AFTER_WIDTH)			
+		
+			plt.show()
+		
+			# Save map to file
+			#print 'Saving figure ' + mapDir + '/' + str(startTime.date()) + '_' + str(endTime.date()) + '_' + str((i/2) + 1) + '.png' + '...'
+			#plt.savefig(mapDir + '/' + str(startTime.date()) + '_' + str(endTime.date()) + '_' + str((i/2) + 1) + '.png')
+		
+			print DASHES
+	
+		#==================================================================================================================#
+		#                                                                                                                  #
+		#  Output                                                                                                          #
+		#                                                                                                                  #
+		#==================================================================================================================#
+	
+		# Reset basemap for conversions		
+		print 'Preparing output...'
+		# Setup equidistant map projection
+		m = Basemap(llcrnrlon = MIN_LON, llcrnrlat = MIN_LAT, urcrnrlon = MAX_LON, urcrnrlat = MAX_LAT, 
+							projection = 'aeqd', lat_0 = meanLat, lon_0 = meanLon)
+	
+		# Remove NaN track cells
+		print 'Removing unassigned cells...'
+		removeCells = []
+		if bigData:
+			for cell in activeCells:
+				if stormCells[cell]['track'] == 'NaN': 
+					activeCells.pop(activeCells.index(cell))
+		else:
+			for cell in stormCells:
+				if stormCells[cell]['track'] == 'NaN': removeCells.append(cell)
+			for cell in removeCells: stormCells.pop(cell, None)
+	
+		print 'Finding new start time, age, and speed for each cell...'
+	
+		for track in stormTracks:
+			# Get startime and age
+			# Convert all datetimes to str for JSON
+			for cell in stormTracks[track]['cells']:
+				cell['start_time'] = stormTracks[track]['t0']
+				cell['age'] = (cell['time'] - cell['start_time']).total_seconds()
+			
+			# Sort cells by time	
 			times = []
-			finalCellsX = []
-			finalCellsY = []
+			cells = []		
 			for cell in stormTracks[track]['cells']:
 				times.append(cell['time'])
 			
@@ -826,163 +906,148 @@ if __name__ == '__main__':
 			for cellTime in times:
 				for cell in stormTracks[track]['cells']:
 					if cell['time'] == cellTime:
-						finalCellsX.append(m(cell['lon'], cell['lat'])[0])
-						finalCellsY.append(m(cell['lon'], cell['lat'])[1])
+						cells.append(cell)
 						break
-			
-			m.plot(finalCellsX, finalCellsY, color = 'r', linewidth = AFTER_WIDTH)			
 		
-		plt.show()
+			# Calculate speed and component velocities for each cell		
+			for cell in cells:		
+				index = cells.index(cell)
+				if index == 0: 
+					cell['motion_east'] = stormTracks[track]['u'] * distanceRatio * 1000 		# m/s
+					cell['motion_south'] = -1 * stormTracks[track]['v'] * distanceRatio * 1000 	# m/s
+				
+				else:
+					prevX = cells[index - 1]['x']
+					prevY = cells[index - 1]['y']
+					prevTime = cells[index - 1]['time']
+				
+					cell['motion_east'] = (cell['x'] - prevX) / ((cell['time'] - prevTime).total_seconds()) * distanceRatio * 1000			# m/s
+					cell['motion_south'] = -1 * (cell['y'] - prevY) / ((cell['time'] - prevTime).total_seconds()) * distanceRatio * 1000	# m/s
+				
+				cell['speed'] = np.sqrt(cell['motion_east']**2 + cell['motion_south']**2)
 		
-		# Save map to file
-		#print 'Saving figure ' + mapDir + '/' + str(startTime.date()) + '_' + str(endTime.date()) + '_' + str((i/2) + 1) + '.png' + '...'
-		#plt.savefig(mapDir + '/' + str(startTime.date()) + '_' + str(endTime.date()) + '_' + str((i/2) + 1) + '.png')
-		
-		print DASHES
-	
-	#==================================================================================================================#
-	#                                                                                                                  #
-	#  Output                                                                                                          #
-	#                                                                                                                  #
-	#==================================================================================================================#
-	
-	# Reset basemap for conversions		
-	print 'Preparing output...'
-	# Setup equidistant map projection
-	m = Basemap(llcrnrlon = MIN_LON, llcrnrlat = MIN_LAT, urcrnrlon = MAX_LON, urcrnrlat = MAX_LAT, 
-						projection = 'aeqd', lat_0 = meanLat, lon_0 = meanLon)
-	
-	# Remove NaN track cells
-	print 'Removing unassigned cells...'
-	removeCells = []
-	for cell in stormCells:
-		if stormCells[cell]['track'] == 'NaN': removeCells.append(cell)
-	for cell in removeCells: stormCells.pop(cell, None)
-	
-	print 'Finding new start time, age, and speed for each cell...'
-	
-	for track in stormTracks:
-		# Get startime and age
-		# Convert all datetimes to str for JSON
-		for cell in stormTracks[track]['cells']:
-			cell['start_time'] = stormTracks[track]['t0']
-			cell['age'] = (cell['time'] - cell['start_time']).total_seconds()
-			
-		# Sort cells by time	
-		times = []
-		cells = []		
-		for cell in stormTracks[track]['cells']:
-			times.append(cell['time'])
-			
-		times = sorted(times)
-		for cellTime in times:
+			# Cleanup for output
+			ids = []
 			for cell in stormTracks[track]['cells']:
-				if cell['time'] == cellTime:
-					cells.append(cell)
-					break
-		
-		# Calculate speed and component velocities for each cell		
-		for cell in cells:		
-			index = cells.index(cell)
-			if index == 0: 
-				cell['motion_east'] = stormTracks[track]['u'] * distanceRatio * 1000 		# m/s
-				cell['motion_south'] = -1 * stormTracks[track]['v'] * distanceRatio * 1000 	# m/s
-				
-			else:
-				prevX = cells[index - 1]['x']
-				prevY = cells[index - 1]['y']
-				prevTime = cells[index - 1]['time']
-				
-				cell['motion_east'] = (cell['x'] - prevX) / ((cell['time'] - prevTime).total_seconds()) * distanceRatio * 1000			# m/s
-				cell['motion_south'] = -1 * (cell['y'] - prevY) / ((cell['time'] - prevTime).total_seconds()) * distanceRatio * 1000	# m/s
-				
-			cell['speed'] = np.sqrt(cell['motion_east']**2 + cell['motion_south']**2)
-		
-		# Cleanup for output
-		ids = []
-		for cell in stormTracks[track]['cells']:
-			# Convert times to strings for JSON
-			cell['time'] = str(cell['time'])
-			cell['start_time'] = str(cell['start_time'])
+				# Convert times to strings for JSON
+				cell['time'] = str(cell['time'])
+				cell['start_time'] = str(cell['start_time'])
 			
+				# Remove data specific to this run
+				cell.pop('x', None)
+				cell.pop('y', None)
+			
+				ids.append(stormCells.keys()[stormCells.values().index(cell)])
+		
+			# Only save cell IDs to storm track to save space
+			stormTracks[track]['cells'] = ids			
+			
+			stormTracks[track]['t0'] = str(stormTracks[track]['t0'])
+			stormTracks[track]['tend'] = str(stormTracks[track]['tend'])
+			
+			# Convert x, y back to lon, lat and km/s to m/s
+			stormTracks[track]['lon0'], stormTracks[track]['lat0'] = m(stormTracks[track]['x0'], stormTracks[track]['y0'], inverse = True)
+			stormTracks[track]['lonf'], stormTracks[track]['latf'] = m(stormTracks[track]['xf'], stormTracks[track]['yf'], inverse = True)
+			stormTracks[track]['u'] = stormTracks[track]['u'] * distanceRatio * 1000 	# m/s
+			stormTracks[track]['v'] = stormTracks[track]['v'] * distanceRatio * 1000 	# m/s
+		
 			# Remove data specific to this run
-			cell.pop('x', None)
-			cell.pop('y', None)
-			
-			ids.append(stormCells.keys()[stormCells.values().index(cell)])
-		
-		# Only save cell IDs to storm track to save space
-		stormTracks[track]['cells'] = ids			
-			
-		stormTracks[track]['t0'] = str(stormTracks[track]['t0'])
-		stormTracks[track]['tend'] = str(stormTracks[track]['tend'])
-			
-		# Convert x, y back to lon, lat and km/s to m/s
-		stormTracks[track]['lon0'], stormTracks[track]['lat0'] = m(stormTracks[track]['x0'], stormTracks[track]['y0'], inverse = True)
-		stormTracks[track]['lonf'], stormTracks[track]['latf'] = m(stormTracks[track]['xf'], stormTracks[track]['yf'], inverse = True)
-		stormTracks[track]['u'] = stormTracks[track]['u'] * distanceRatio * 1000 	# m/s
-		stormTracks[track]['v'] = stormTracks[track]['v'] * distanceRatio * 1000 	# m/s
-		
-		# Remove data specific to this run
-		stormTracks[track].pop('x0', None)
-		stormTracks[track].pop('y0', None)
-		stormTracks[track].pop('xf', None)
-		stormTracks[track].pop('yf', None)
+			stormTracks[track].pop('x0', None)
+			stormTracks[track].pop('y0', None)
+			stormTracks[track].pop('xf', None)
+			stormTracks[track].pop('yf', None)
 				
-	if outType:
-		# Print data for each time step
+		if outType:
+			# Print data for each time step
 		
-		# Sort cells by time
-		times = []		
-		for cell in stormCells:
-			times.append(datetime.datetime.strptime(stormCells[cell]['time'], '%Y-%m-%d %H:%M:%S'))
-			
-		times = sorted(np.unique(times))
-		
-		for cellTime in times:
-			cells = {}
+			# Sort cells by time
+			times = []		
 			for cell in stormCells:
-				if datetime.datetime.strptime(stormCells[cell]['time'], '%Y-%m-%d %H:%M:%S') == cellTime:
-					cells[cell] = stormCells[cell]
+				times.append(datetime.datetime.strptime(stormCells[cell]['time'], '%Y-%m-%d %H:%M:%S'))
 			
-			# Print stormCell data for this time step
-			print 'Printing ' + str(cellTime) + '_' + 'cells.data'
-			with open(outDir + '/' + str(cellTime) + '_' + 'cells.data', 'w') as outfile:
-				json.dump(cells, outfile, sort_keys = True, indent = 0)
+			times = sorted(np.unique(times))
+		
+			for cellTime in times:
+				cells = {}
+				for cell in stormCells:
+					if datetime.datetime.strptime(stormCells[cell]['time'], '%Y-%m-%d %H:%M:%S') == cellTime:
+						cells[cell] = stormCells[cell]
+			
+				# Print stormCell data for this time step
+				print 'Printing ' + str(cellTime) + '_' + 'cells.data'
+				with open(outDir + '/' + str(cellTime) + '_' + 'cells.data', 'w') as outfile:
+					json.dump(cells, outfile, sort_keys = True, indent = 0)
+	
+				outfile.close()
+		
+		else:
+			# Print stormCells to data file
+			if bigData: 
+				filename = str(date) + '_cells.data'
+				cells = {}
+				for cell in activeCells:
+					if datetime.datetime.strptime(str(stormCells[cell]['time']), '%Y-%m-%d %H:%M:%S').date() == date:
+						cells[cell] = stormCells[cell]
+				print 'Printing ' + filename
+				with open(outDir + '/' + filename, 'w') as outfile:
+					json.dump(cells, outfile, sort_keys = True, indent = 0)
+						
+			else: 
+				filename = str(startTime.date()) + '_' + str(endTime.date()) + '_' + 'cells.data'
+				print 'Printing ' + filename
+				with open(outDir + '/' + filename, 'w') as outfile:
+					json.dump(stormCells, outfile, sort_keys = True, indent = 0)
+	
+			outfile.close()
+
+			# Print stormTracks to data file
+			if bigData:
+				filename = str(date) + '_tracks.data'
+				tracks = {}
+				for track in stormTracks:
+					if (datetime.datetime.strptime(str(stormTracks[track]['t0']), '%Y-%m-%d %H:%M:%S').date() == date
+							or datetime.datetime.strptime(str(stormTracks[track]['tend']), '%Y-%m-%d %H:%M:%S').date() == date):
+						tracks[track] = stormTracks[track]
+				print 'Printing ' + filename
+				with open(outDir + '/' + filename, 'w') as outfile:
+					json.dump(tracks, outfile, sort_keys = True, indent = 0)
+			else:
+				filename = str(startTime.date()) + '_' + str(endTime.date()) + '_' + 'tracks.data'
+				print 'Printing ' + filename
+				with open(outDir + '/' + filename, 'w') as outfile:
+					json.dump(stormTracks, outfile, sort_keys = True, indent = 0)
 	
 			outfile.close()
 		
-	else:
-		# Print stormCells to data file
-		print 'Printing ' + str(startTime.date()) + '_' + str(endTime.date()) + '_' + 'cells.data'
-		with open(outDir + '/' + str(startTime.date()) + '_' + str(endTime.date()) + '_' + 'cells.data', 'w') as outfile:
-			json.dump(stormCells, outfile, sort_keys = True, indent = 0)
-	
-		outfile.close()
-
-		# Print stormTracks to data file
-		print 'Printing ' + str(startTime.date()) + '_' + str(endTime.date()) + '_' + 'tracks.data'
-		with open(outDir + '/' + str(startTime.date()) + '_' + str(endTime.date()) + '_' + 'tracks.data', 'w') as outfile:
-			json.dump(stormTracks, outfile, sort_keys = True, indent = 0)
-	
-		outfile.close()
+		# Print metadata
+		if bigData:
+			filename = str(date) + '.meta'
+		else: 
+			filename = str(startTime.date()) + '_' + str(endTime.date()) + '.meta'
+		print 'Printing ' + filename
+		f = open(outDir + '/' + filename, 'w')
+		f.write('Start Time: ' + str(startTime) + '\n')
+		f.write('End Time: ' + str(endTime) + '\n')
+		f.write('File Type: ' + fType + '\n')
+		f.write('Buffer Distance: ' + str(bufferDist) + '\n')
+		f.write('Buffer Time: ' + str(bufferTime) + '\n')
+		f.write('Join Distance: ' + str(joinDist) + '\n')
+		f.write('Join Time: ' + str(joinTime) + '\n')
+		f.write('Min Cells per Track: ' + str(minCells) + '\n')
+		f.write('Main Iterations: ' + str(mainIters) + '\n')
+		f.write('Breakup Iterations: ' + str(breakIters) + '\n')
+		f.write('Number of Cells: ' + str(len(activeCells)) + '\n')
+		f.write('Completed: ' + str(datetime.datetime.now()))
+		f.close()
 		
-	# Print metadata
-	print 'Printing ' + str(startTime.date()) + '_' + str(endTime.date()) + '.meta'
-	f = open(outDir + '/' + str(startTime.date()) + '_' + str(endTime.date()) + '.meta', 'w')
-	f.write('Start Time: ' + str(startTime) + '\n')
-	f.write('End Time: ' + str(endTime) + '\n')
-	f.write('File Type: ' + fType + '\n')
-	f.write('Buffer Distance: ' + str(bufferDist) + '\n')
-	f.write('Buffer Time: ' + str(bufferTime) + '\n')
-	f.write('Join Distance: ' + str(joinDist) + '\n')
-	f.write('Join Time: ' + str(joinTime) + '\n')
-	f.write('Min Cells per Track: ' + str(minCells) + '\n')
-	f.write('Main Iterations: ' + str(mainIters) + '\n')
-	f.write('Breakup Iterations: ' + str(breakIters) + '\n')
-	f.write('Number of Cells: ' + str(totNumCells) + '\n')
-	f.write('Completed: ' + str(datetime.datetime.now()))
-	f.close()
+		# Readd cell values
+		for cell in activeCells:
+			stormCells[cell]['x'] = m(stormCells[cell]['lon'], stormCells[cell]['lat'])[0]
+			stormCells[cell]['y'] = m(stormCells[cell]['lon'], stormCells[cell]['lat'])[1]
+			stormCells[cell]['time'] = datetime.datetime.strptime(str(stormCells[cell]['time']), '%Y-%m-%d %H:%M:%S')
+		
+		# Don't do it again if not bigData
+		if not bigData: break
 
 	print '\n\nBest Track has completed succesfully!\n\n'
 	

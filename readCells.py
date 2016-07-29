@@ -29,6 +29,7 @@ def readRyan(inDir, inSuffix, startTime, endTime):
 	numTrackTimes = 0
 	totNumCells = 0
 	stormCells = {} 
+	dates = []
 	
 	# Read in Ryan files
 	for root, dirs, files in os.walk(inDir):
@@ -39,6 +40,7 @@ def readRyan(inDir, inSuffix, startTime, endTime):
 				# Check if file falls in date range
 				try:
 					fileDate = datetime.datetime.strptime(str(trackFile).split('_')[0], '%Y-%m-%d-%H%M%S')
+					if fileDate not in dates: dates.append(fileDate.date())
 				except ValueError:
 					print 'File ' + str(trackFile) + ' has an invalid name.  Expected format YYYY-MM-DD-hhmmss_...'
 					continue
@@ -70,7 +72,7 @@ def readRyan(inDir, inSuffix, startTime, endTime):
 											'lonr':float(cell[4]), 'orientation':float(cell[8]), 'track':str(cell[9]) + '_' + str(fileDate.date())} 
 					totNumCells += 1
 						
-	return [stormCells, totNumCells, numTrackTimes]
+	return [stormCells, totNumCells, numTrackTimes, dates]
 	
 
 ## Parses raw segmotion .xml files
@@ -82,7 +84,8 @@ def readRyan(inDir, inSuffix, startTime, endTime):
 def readSegmotion(inDir, inSuffix, startTime, endTime):
 	numTrackTimes = 0
 	totNumCells = 0
-	stormCells = {} 
+	stormCells = {}
+	dates = [] 
 	
 	# Read in Segmotion files
 	for root, dirs, files in os.walk(inDir):
@@ -93,6 +96,7 @@ def readSegmotion(inDir, inSuffix, startTime, endTime):
 				# Check if file falls in date range
 				try:
 					fileDate = datetime.datetime.strptime(str(trackFile).split('.')[0], '%Y%m%d-%H%M%S')
+					if fileDate not in dates: dates.append(fileDate.date())
 				except ValueError:
 					print 'File ' + str(trackFile) + ' has an invalid name.  Expected format YYYYMMDD-hhmmss.xml...'
 					continue
@@ -124,7 +128,7 @@ def readSegmotion(inDir, inSuffix, startTime, endTime):
 					totNumCells += 1
 														
 						
-	return [stormCells, totNumCells, numTrackTimes]
+	return [stormCells, totNumCells, numTrackTimes, dates]
 	
 
 ## Parses probSevere .ascii files
@@ -137,6 +141,7 @@ def readProbSevere(inDir, inSuffix, startTime, endTime):
 	numTrackTimes = 0
 	totNumCells = 0
 	stormCells = {} 
+	dates = []
 	
 	# Read in Segmotion files
 	for root, dirs, files in os.walk(inDir):
@@ -149,6 +154,7 @@ def readProbSevere(inDir, inSuffix, startTime, endTime):
 					date = str(trackFile).split('.')[0].split('_')[3]
 					time = str(trackFile).split('.')[0].split('_')[4]
 					fileDate = datetime.datetime.strptime(date + '_' + time, '%Y%m%d_%H%M%S')
+					if fileDate not in dates: dates.append(fileDate.date())
 				except ValueError:
 					print 'File ' + str(trackFile) + ' has an invalid name.  Expected format SSEC_AWIPS_PROBSEVERE_YYYYMMDD_hhmmss.ascii...'
 					continue
@@ -188,7 +194,7 @@ def readProbSevere(inDir, inSuffix, startTime, endTime):
 					totNumCells += 1
 						
 						
-	return [stormCells, totNumCells, numTrackTimes]
+	return [stormCells, totNumCells, numTrackTimes, dates]
 	
 	
 	
