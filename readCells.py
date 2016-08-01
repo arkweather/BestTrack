@@ -40,12 +40,12 @@ def readRyan(inDir, inSuffix, startTime, endTime):
 				# Check if file falls in date range
 				try:
 					fileDate = datetime.datetime.strptime(str(trackFile).split('_')[0], '%Y-%m-%d-%H%M%S')
-					if fileDate not in dates: dates.append(fileDate.date())
 				except ValueError:
 					print 'File ' + str(trackFile) + ' has an invalid name.  Expected format YYYY-MM-DD-hhmmss_...'
 					continue
 				if not startTime <= fileDate < endTime:
 					continue
+				if fileDate.date() not in dates: dates.append(fileDate.date())
 				
 				# Open file
 				f = open(root + '/' + trackFile)
@@ -96,12 +96,12 @@ def readSegmotion(inDir, inSuffix, startTime, endTime):
 				# Check if file falls in date range
 				try:
 					fileDate = datetime.datetime.strptime(str(trackFile).split('.')[0], '%Y%m%d-%H%M%S')
-					if fileDate not in dates: dates.append(fileDate.date())
 				except ValueError:
 					print 'File ' + str(trackFile) + ' has an invalid name.  Expected format YYYYMMDD-hhmmss.xml...'
 					continue
 				if not startTime <= fileDate < endTime:
 					continue
+				if fileDate.date() not in dates: dates.append(fileDate.date())
 				
 				# Open file
 				f = open(root + '/' + trackFile)
@@ -154,12 +154,13 @@ def readProbSevere(inDir, inSuffix, startTime, endTime):
 					date = str(trackFile).split('.')[0].split('_')[3]
 					time = str(trackFile).split('.')[0].split('_')[4]
 					fileDate = datetime.datetime.strptime(date + '_' + time, '%Y%m%d_%H%M%S')
-					if fileDate not in dates: dates.append(fileDate.date())
 				except ValueError:
 					print 'File ' + str(trackFile) + ' has an invalid name.  Expected format SSEC_AWIPS_PROBSEVERE_YYYYMMDD_hhmmss.ascii...'
 					continue
 				if not startTime <= fileDate < endTime:
 					continue
+					
+				if fileDate.date() not in dates: dates.append(fileDate.date())
 					
 				# Open file
 				f = open(root + '/' + trackFile)

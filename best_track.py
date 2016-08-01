@@ -78,9 +78,10 @@ def getOptions():
 		mc = int(lines[23].split('=')[1])
 		mi = int(lines[25].split('=')[1])
 		bi = int(lines[27].split('=')[1])
-		outDir = lines[29].split('=')[1].strip()
-		ts = bool(int(lines[31].split('=')[1]))
-		m = bool(int(lines[33].split('=')[1]))
+		bg = int(lines[29].split('=')[1])
+		outDir = lines[31].split('=')[1].strip()
+		ts = bool(int(lines[33].split('=')[1]))
+		m = bool(int(lines[35].split('=')[1]))
 		
 	except IOError:
 		print 'Unable to find best_track.config.  Please make sure the file is in the same directory as best_track.py\n\n'
@@ -105,6 +106,7 @@ def getOptions():
 	parser.add_argument('-mc', '--min_cells', type = int, metavar = '', default = mc, help = 'Minimum number of storm cells per track')
 	parser.add_argument('-mi', '--main_iters', type = int, metavar = '', default = mi, help = 'Number of main iterations')
 	parser.add_argument('-bi', '--breakup_iters', type = int, metavar = '', default = bi, help = 'Number of breakup iterations')
+	parser.add_argument('-bg', '--big_thresh', type = int, metavar = '', default = bg, help = 'Number of cells threshold to activate big data mode')
 	parser.add_argument('-o', '--out_dir', type = str, metavar = '', default = outDir, help = 'Name of output directory for new tracking files')
 	parser.add_argument('-ts', '--time_step', action = 'store_true', default = ts, help = 'Toggle file creation for each time step. Default is to combine all times into one file.')
 	parser.add_argument('-m', '--map', action = 'store_true', default = m, help = 'Toggle map creation')
@@ -130,6 +132,7 @@ def checkArgs(args):
 	breakIters = args['breakup_iters']
 	outDir = args['out_dir']
 	mapResults = args['map']
+	bigThreshold = args['big_thresh']
 	
 	# Time Checks
 	stimeDetail = len(startTime.split('-'))
@@ -207,6 +210,8 @@ def checkArgs(args):
 		print '\nERROR: Number of breakup iterations must be in range ['  + str(MIN_BREAKUP_ITERS) + ', ' + str(MAX_BREAKUP_ITERS) + '].  Instead got: ' + str(breakIters) + '\n'
 		sys.exit(2)
 	else: print 'Number of breakup iterations:  ' + str(breakIters)
+	
+	print 'Big Data Threshold: ' + str(bigThreshold)
 	
 	if not os.path.isdir(outDir):
 		print 'Unable to locate output directory. The specified location will be created.'
@@ -401,6 +406,7 @@ if __name__ == '__main__':
 	outDir = args['out_dir']
 	outType = args['time_step']
 	mapResults = args['map']
+	bigThreshold = args['big_thresh']
 	bigData = False
 	## @}
 	
@@ -453,8 +459,9 @@ if __name__ == '__main__':
 	if numTrackTimes == 0:
 		print 'No valid files found for this time period.  Please check the source directory and specified dates.\n'
 		sys.exit(0)
-		
-	if numTrackTimes >= 500:
+	
+	# Activate bigData mode above a certain threshold (50000 cells)	
+	if totNumCells >= bigThreshold:
 		bigData = True
 		print 'Files will be processed in big data mode...'
 		if not outType: print 'An output file will be created for each day in the data...'
@@ -515,7 +522,7 @@ if __name__ == '__main__':
 	
 	# Run the whole thing for each date
 	# Note this will only run once if not bigData (break at end)
-	for date in dates:
+	for date in np.unique(dates):
 		dt = datetime.timedelta(days = 1)
 		activeCells = []
 		
@@ -786,7 +793,7 @@ if __name__ == '__main__':
 		#                                                                                                                  #
 		#==================================================================================================================#		
 	
-		if mapResults and not bigData:
+		if mapResults:
 			print 'Preparing to plot maps...'
 		
 			# Get original storm tracks
@@ -825,6 +832,7 @@ if __name__ == '__main__':
 				originCellsY = []
 			
 				for cell in stOrigin[track]['cells']:
+					if bigData and cell['time'].date() != date: continue
 					times.append(cell['time'])
 				times = sorted(times)
 				for cellTime in times:
@@ -843,6 +851,7 @@ if __name__ == '__main__':
 				finalCellsX = []
 				finalCellsY = []
 				for cell in stormTracks[track]['cells']:
+					if bigData and cell['time'].date() != date: continue
 					times.append(cell['time'])
 			
 				times = sorted(times)
@@ -880,8 +889,8 @@ if __name__ == '__main__':
 		removeCells = []
 		if bigData:
 			for cell in activeCells:
-				if stormCells[cell]['track'] == 'NaN': 
-					activeCells.pop(activeCells.index(cell))
+				if stormCells[cell]['track'] == 'NaN': removeCells.append(cell)					
+			for cell in removeCells: activeCells.pop(activeCells.index(cell))
 		else:
 			for cell in stormCells:
 				if stormCells[cell]['track'] == 'NaN': removeCells.append(cell)
@@ -961,9 +970,13 @@ if __name__ == '__main__':
 			# Print data for each time step
 		
 			# Sort cells by time
-			times = []		
-			for cell in stormCells:
-				times.append(datetime.datetime.strptime(stormCells[cell]['time'], '%Y-%m-%d %H:%M:%S'))
+			times = []
+			if bigData:
+				for cell in activeCells:
+					times.append(datetime.datetime.strptime(stormCells[cell]['time'], '%Y-%m-%d %H:%M:%S'))
+			else:		
+				for cell in stormCells:
+					times.append(datetime.datetime.strptime(stormCells[cell]['time'], '%Y-%m-%d %H:%M:%S'))
 			
 			times = sorted(np.unique(times))
 		
@@ -974,8 +987,10 @@ if __name__ == '__main__':
 						cells[cell] = stormCells[cell]
 			
 				# Print stormCell data for this time step
-				print 'Printing ' + str(cellTime) + '_' + 'cells.data'
-				with open(outDir + '/' + str(cellTime) + '_' + 'cells.data', 'w') as outfile:
+				filename = (str(cellTime.year) + str(cellTime.month).zfill(2) + str(cellTime.day).zfill(2) + '_' + 
+					str(cellTime.hour).zfill(2) + str(cellTime.minute).zfill(2) + str(cellTime.second).zfill(2) + '_cells.data')
+				print 'Printing ' + filename
+				with open(outDir + '/' + filename, 'w') as outfile:
 					json.dump(cells, outfile, sort_keys = True, indent = 0)
 	
 				outfile.close()
@@ -983,7 +998,7 @@ if __name__ == '__main__':
 		else:
 			# Print stormCells to data file
 			if bigData: 
-				filename = str(date) + '_cells.data'
+				filename = str(date.year) + str(date.month).zfill(2) + str(date.day).zfill(2) + '_cells.data'
 				cells = {}
 				for cell in activeCells:
 					if datetime.datetime.strptime(str(stormCells[cell]['time']), '%Y-%m-%d %H:%M:%S').date() == date:
@@ -993,7 +1008,8 @@ if __name__ == '__main__':
 					json.dump(cells, outfile, sort_keys = True, indent = 0)
 						
 			else: 
-				filename = str(startTime.date()) + '_' + str(endTime.date()) + '_' + 'cells.data'
+				filename = (str(startTime.year) + str(startTime.month).zfill(2) + str(startTime.day).zfill(2) + '_' + 
+					str(endTime.year) + str(endTime.month).zfill(2) + str(endTime.day).zfill(2) + '_cells.data')
 				print 'Printing ' + filename
 				with open(outDir + '/' + filename, 'w') as outfile:
 					json.dump(stormCells, outfile, sort_keys = True, indent = 0)
@@ -1002,7 +1018,7 @@ if __name__ == '__main__':
 
 			# Print stormTracks to data file
 			if bigData:
-				filename = str(date) + '_tracks.data'
+				filename = str(date.year) + str(date.month).zfill(2) + str(date.day).zfill(2) + '_tracks.data'
 				tracks = {}
 				for track in stormTracks:
 					if (datetime.datetime.strptime(str(stormTracks[track]['t0']), '%Y-%m-%d %H:%M:%S').date() == date
@@ -1012,7 +1028,8 @@ if __name__ == '__main__':
 				with open(outDir + '/' + filename, 'w') as outfile:
 					json.dump(tracks, outfile, sort_keys = True, indent = 0)
 			else:
-				filename = str(startTime.date()) + '_' + str(endTime.date()) + '_' + 'tracks.data'
+				filename = (str(startTime.year) + str(startTime.month).zfill(2) + str(startTime.day).zfill(2) + '_' + 
+					str(endTime.year) + str(endTime.month).zfill(2) + str(endTime.day).zfill(2) + '_tracks.data')
 				print 'Printing ' + filename
 				with open(outDir + '/' + filename, 'w') as outfile:
 					json.dump(stormTracks, outfile, sort_keys = True, indent = 0)
@@ -1021,10 +1038,11 @@ if __name__ == '__main__':
 		
 		# Print metadata
 		if bigData:
-			filename = str(date) + '.meta'
+			filename = str(date.year) + str(date.month).zfill(2) + str(date.day).zfill(2) + '.meta'
 		else: 
-			filename = str(startTime.date()) + '_' + str(endTime.date()) + '.meta'
-		print 'Printing ' + filename
+			filename = (str(startTime.year) + str(startTime.month).zfill(2) + str(startTime.day).zfill(2) + '_' + 
+				str(endTime.year) + str(endTime.month).zfill(2) + str(endTime.day).zfill(2) + '.meta')
+		print 'Printing ' + filename + '\n\n'
 		f = open(outDir + '/' + filename, 'w')
 		f.write('Start Time: ' + str(startTime) + '\n')
 		f.write('End Time: ' + str(endTime) + '\n')
@@ -1040,14 +1058,14 @@ if __name__ == '__main__':
 		f.write('Completed: ' + str(datetime.datetime.now()))
 		f.close()
 		
+		# Don't do it again if not bigData
+		if not bigData: break
+		
 		# Readd cell values
 		for cell in activeCells:
 			stormCells[cell]['x'] = m(stormCells[cell]['lon'], stormCells[cell]['lat'])[0]
 			stormCells[cell]['y'] = m(stormCells[cell]['lon'], stormCells[cell]['lat'])[1]
 			stormCells[cell]['time'] = datetime.datetime.strptime(str(stormCells[cell]['time']), '%Y-%m-%d %H:%M:%S')
-		
-		# Don't do it again if not bigData
-		if not bigData: break
 
 	print '\n\nBest Track has completed succesfully!\n\n'
 	
