@@ -44,7 +44,7 @@ installed and available for use by your distribution.
 USAGE:
 
 usage: best_track.py [-h] [-i] [-s] [-t] [-bd] [-bt] [-jt] [-jd] [-mc] [-mi]
-                     [-bi] [-o] [-ts] [-m]
+                     [-bi] [-bg] [-o] [-ts] [-m]
                      start_time end_time
                      
         -h    --help               Show the help message and exit.
