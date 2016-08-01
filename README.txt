@@ -82,6 +82,8 @@ usage: best_track.py [-h] [-i] [-s] [-t] [-bd] [-bt] [-jt] [-jd] [-mc] [-mi]
                                    single main iteration.  More iterations may increase the
                                    likelihood of convergence, but will also increase runtime.
 
+       -bg    --big_thresh         The number of storm cells used as a threshold to determine
+                                   whether to run the code in "big data mode" (see below)
 
         -o    --out_dir            Specify where the output files will be saved.
         
@@ -179,6 +181,17 @@ attributes:
 Note that the naming conventions for each file type MUST be followed for Best
 Track to successfully read in the data!
 
+Big Data Mode:
+
+After reading in all files in the input directory in the specified time range,
+if there are more storm cells than the specified threshold (default 50000), Best
+Track will run in "Big Data Mode".  In this mode, each day will be processed 
+individually and output files (See Output) will be created for each valid date 
+within the specified time range.  This is intended to decrease total runtime
+on very large datasets, but will not reduce the memory usage of the script.
+CAUTION: Reading in a significant number of files or files with a significant
+number of storm cells may result in poor performance and/or out of memory errors.
+
 -----------------------------------------------------------------------------------
 
 OUTPUT:
@@ -190,7 +203,7 @@ default to single file output.  Contrary to the name, this will create a total
 of 3 files in the output directory: ..._cells.data, ..._tracks.data, and ...meta.
 Here we will describe the contents of each file:
 
-        File Name:   YYYY-MM-DD_YYYY-MM-DD_cells.data
+        File Name:   YYYYMMDD_YYYYMMDD_cells.data
         Attributes:  cellID               Unique identifier for the cell
                      age                  Age of the cell in seconds
                      lat                  Centroid latitude
@@ -224,7 +237,7 @@ Here we will describe the contents of each file:
                                 
                 *        *        *        *        *        *
                                 
-        File Name:   YYYY-MM-DD_YYYY-MM-DD_tracks.data
+        File Name:   YYYYMMDD_YYYYMMDD_tracks.data
         Attributes:  trackID          Unique identifier for the track
                      cells            Array of cell IDs associated with the track
                      lat0             Starting lat of the track
@@ -253,7 +266,7 @@ Here we will describe the contents of each file:
                                 
                 *        *        *        *        *        *
                                 
-        File Name:   YYYY-MM-DD_YYYY-MM-DD.meta
+        File Name:   YYYYMMDD_YYYYMMDD.meta
         Attributes:  Start Time
                      End Time
                      File Type
@@ -267,10 +280,18 @@ Here we will describe the contents of each file:
                      Number of Cells      Total number of cells processed
                      Completed            Local time the script completed
                                 
-The file name YYYY-MM-DD_YYYY-MM-DD... uses the start time and end time for which
+The file name YYYYMMDD_YYYYMMDD... uses the start time and end time for which
 the script was run.  CAUTION: If Best Track is run for multiple time ranges within
 the same day, the output files will have the same name and will overwrite the
 existing files.
+
+Big Data Method:
+
+If the -ts flag is not used and Best Track is run in "Big Data Mode" 
+(see Input), a YYYYMMDD_cells.data, YYYYMMDD_tracks.data, and 
+YYYYMMDD.meta file will be produced for each day in the specified time frame for
+which data exists.  These files will have the same structure as their "normal
+mode" single file method counterparts (see above).
 
 Time Step Method:
 
@@ -283,7 +304,7 @@ post-processing by the user later on.  Each file is equivalent to the
 ..._cells.data file described for the previous method, but only cells valid at that
 time step will be included.  No ..._tracks.data file is made using this method.
 
-        File Name:   YYYY-MM-DD HH:mm:ss_cells.data
+        File Name:   YYYYMMDD_HHmmss_cells.data
         Attributes:  See ..._cells.data in Single File Method
         
 -----------------------------------------------------------------------------------
