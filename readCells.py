@@ -37,6 +37,9 @@ def readRyan(inDir, inSuffix, startTime, endTime):
 		for trackFile in files:
 			if trackFile.endswith('.data'):
 				
+				# Skip hidden files
+				if trackFile.startswith('._'): continue
+				
 				# Check if file falls in date range
 				try:
 					fileDate = datetime.datetime.strptime(str(trackFile).split('_')[0], '%Y-%m-%d-%H%M%S')
@@ -93,6 +96,9 @@ def readSegmotion(inDir, inSuffix, startTime, endTime):
 		for trackFile in files:
 			if trackFile.endswith('.xml'):
 				
+				# Skip hidden files
+				if trackFile.startswith('._'): continue
+				
 				# Check if file falls in date range
 				try:
 					fileDate = datetime.datetime.strptime(str(trackFile).split('.')[0], '%Y%m%d-%H%M%S')
@@ -148,6 +154,9 @@ def readProbSevere(inDir, inSuffix, startTime, endTime):
 		if inSuffix != '' and not (files and not dirs and os.path.split(root)[-1] == inSuffix): continue
 		for trackFile in files:
 			if trackFile.endswith('.ascii'):
+				
+				# Skip hidden files
+				if trackFile.startswith('._'): continue
 				
 				# Check if file falls in date range
 				try:
