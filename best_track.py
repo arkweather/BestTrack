@@ -25,8 +25,9 @@ import scipy.stats.mstats as stats
 from collections import defaultdict
 import readCells
 import traceback
-from multiprocessing import Pool, Manager, Value, Lock
+from multiprocessing import Pool, Manager, Value, Array, Lock
 import multiprocessing
+import ctypes
 from contextlib import closing
 
 ## @name Best-track constants
@@ -384,6 +385,15 @@ def theil_sen_batch(stormTracks):
 	return stormTracks
 		
 	
+## Instantiates global variables for multiprocessing
+## @param l - A multiprocessing.Lock() object to be shared across processes
+## @param c - A multiprocessing.Value('i') object to be shared across processes
+def init(l, c):
+	global lock
+	global counter
+	lock = l
+	counter = c	
+
 #====================================================================================================================#
 #                                                                                                                    #
 #  Main Method - Handle user input, read in files, then run calculations                                             #
@@ -397,7 +407,8 @@ if __name__ == '__main__':
 	# Set Hostname
 	hostname = socket.gethostname().split('.')[0]
 	print '\n\nSetting hostname to ' + hostname
-	print 'Current working directory: ' + os.getcwd() + '\n'
+	print 'Current working directory: ' + os.getcwd()
+	print 'Number of processing cores: ' + str(multiprocessing.cpu_count()) + '\n'
 	
 	# Check user input.  Type casting is handled by argparse.
 	checkArgs(args)
@@ -634,13 +645,6 @@ if __name__ == '__main__':
 					subsets.append(temp)
 				del temp
 				
-				# Instantiate a global lock variable
-				def init(l, c):
-					global lock
-					global counter
-					lock = l
-					counter = c
-				
 				# Split processing over avilable cores
 				l = Lock()
 				counter = Value('i', 0)
@@ -677,93 +681,100 @@ if __name__ == '__main__':
 			# Get Theil-Sen fit
 			print 'Computing Theil-Sen fit for each new cluster...'
 			stormTracks = theil_sen_batch(stormTracks)
+			totNumTracks = len(stormTracks)
 	
 			# Join similar clusters
-			def join():
-				print 'Joining similar clusters...'
-				removeTracks = []
-				tracks = sorted(stormTracks.keys())
-				totNumTracks = len(tracks)
-				merged = 0
+			print 'Joining similar clusters...'
+				
+			tracks = sorted(stormTracks.keys())
+			merged = 0
+
+			for j in tracks:
+				track1 = tracks[j]
 	
-				for j in range(0, len(tracks)):
-					track1 = tracks[j]
+				# Skip tracks with only 1 cell
+				if len(stormTracks[track1]['cells']) < 2:
+					lock.acquire()
+					if counter.value % REPORT_EVERY == 0: print '......' + str(t) + ' of ' + str(totNumTracks) + ' processed for joining......'
+					counter.value += 1
+					lock.release()
+					continue
+				if track1 == 'NaN': continue
+	
+				for k in range(0, j - 1):
+					track2 = tracks[k]
+					print track2
 		
-					# Skip tracks with only 1 cell
-					if len(stormTracks[track1]['cells']) < 2:
-						if j % REPORT_EVERY == 0: print '......' + str(j) + ' of ' + str(totNumTracks) + ' processed for joining......'
+					#if len(stormTracks[track2]['cells']) < 2: continue
+					#print track2
+					if track2 in removed: 
 						continue
-					if track1 == 'NaN': continue
+					
+					if track2 == 'NaN': continue
+					if len(stormTracks[track2]['cells']) < 2: continue
 		
-					for k in range(0, j - 1):
-						track2 = tracks[k]
-			
-						#if len(stormTracks[track2]['cells']) < 2: continue
-						if track2 in removeTracks: continue
-						if track2 == 'NaN': continue
-						if len(stormTracks[track2]['cells']) < 2: continue
-			
-						# Check time gap between tracks
-						if stormTracks[track1]['t0'] > stormTracks[track2]['t0']:
-							earlyIndex = track2
-							lateIndex = track1
-						else:
-							earlyIndex = track1
-							lateIndex = track2
-						timeDiff = stormTracks[lateIndex]['t0'] - stormTracks[earlyIndex]['tend']
-						if abs(timeDiff.total_seconds()) > joinTime.total_seconds: continue
-			
-						# Check distance between tracks
-						x1 = stormTracks[earlyIndex]['xf']
-						y1 = stormTracks[earlyIndex]['yf']
-						x2 = stormTracks[lateIndex]['x0']
-						y2 = stormTracks[lateIndex]['y0']
-			
-						dist = np.sqrt((x1-x2)**2 + (y1 - y2)**2)
-						dist = dist * distanceRatio
-			
-						# Limit track join distance
-						if dist > joinDist: continue
-			
-						# Check velocity difference between tracks
-						u1 = stormTracks[earlyIndex]['u'] * distanceRatio # Km / s
-						v1 = stormTracks[earlyIndex]['v'] * distanceRatio # Km / s
-						u2 = stormTracks[lateIndex]['u'] * distanceRatio  # Km / s
-						v2 = stormTracks[lateIndex]['v'] * distanceRatio  # Km / s
+					# Check time gap between tracks
+					if stormTracks[track1]['t0'] > stormTracks[track2]['t0']:
+						earlyIndex = track2
+						lateIndex = track1
+					else:
+						earlyIndex = track1
+						lateIndex = track2
+					timeDiff = stormTracks[lateIndex]['t0'] - stormTracks[earlyIndex]['tend']
+					if abs(timeDiff.total_seconds()) > joinTime.total_seconds: continue
 		
-						velocityDiff = np.sqrt((u1 - u2)**2 + (v1 - v2)**2)
-						if velocityDiff > float(bufferDist) / bufferTime.total_seconds(): continue
-			
-						# Check if track predictions are close enough				
-						dist = []
-						for cell in stormTracks[lateIndex]['cells']:
-							xActual = cell['x']
-							yActual = cell['y']
-			
-							cellTime = cell['time']
-							xPredict = stormTracks[earlyIndex]['xf'] + (stormTracks[earlyIndex]['u'] * ((cellTime - stormTracks[earlyIndex]['tend']).total_seconds()))
-							yPredict = stormTracks[earlyIndex]['yf'] + (stormTracks[earlyIndex]['v'] * ((cellTime - stormTracks[earlyIndex]['tend']).total_seconds()))
-			
-							dist.append(np.sqrt((xPredict - xActual)**2 + (yPredict - yActual)**2) * distanceRatio)
-			
-						if np.mean(dist) > bufferDist: continue
-			
-						# If the two tracks survived the process, join them 'cause clearly they're meant to be together ;-)
-						removeTracks.append(track2)
-						for cell in stormTracks[track2]['cells']:
-							cell['track'] = track1
-							stormTracks[track1]['cells'].append(cell)
-			
-						stormTracks[track1] = theil_sen_single(stormTracks[track1])
-				
-					if j % REPORT_EVERY == 0:
-						print '......' + str(j) + ' of ' + str(totNumTracks) + ' processed for joining......'
+					# Check distance between tracks
+					x1 = stormTracks[earlyIndex]['xf']
+					y1 = stormTracks[earlyIndex]['yf']
+					x2 = stormTracks[lateIndex]['x0']
+					y2 = stormTracks[lateIndex]['y0']
+		
+					dist = np.sqrt((x1-x2)**2 + (y1 - y2)**2)
+					dist = dist * distanceRatio
+		
+					# Limit track join distance
+					if dist > joinDist: continue
+		
+					# Check velocity difference between tracks
+					u1 = stormTracks[earlyIndex]['u'] * distanceRatio # Km / s
+					v1 = stormTracks[earlyIndex]['v'] * distanceRatio # Km / s
+					u2 = stormTracks[lateIndex]['u'] * distanceRatio  # Km / s
+					v2 = stormTracks[lateIndex]['v'] * distanceRatio  # Km / s
 	
-				merged = len(removeTracks)		
-				print 'All tracks have been joined if necessary!'
-				print 'Merged ' + str(merged) + ' tracks\n'
+					velocityDiff = np.sqrt((u1 - u2)**2 + (v1 - v2)**2)
+					if velocityDiff > float(bufferDist) / bufferTime.total_seconds(): continue
+		
+					# Check if track predictions are close enough				
+					dist = []
+					for cell in stormTracks[lateIndex]['cells']:
+						xActual = cell['x']
+						yActual = cell['y']
+		
+						cellTime = cell['time']
+						xPredict = stormTracks[earlyIndex]['xf'] + (stormTracks[earlyIndex]['u'] * ((cellTime - stormTracks[earlyIndex]['tend']).total_seconds()))
+						yPredict = stormTracks[earlyIndex]['yf'] + (stormTracks[earlyIndex]['v'] * ((cellTime - stormTracks[earlyIndex]['tend']).total_seconds()))
+		
+						dist.append(np.sqrt((xPredict - xActual)**2 + (yPredict - yActual)**2) * distanceRatio)
+		
+					if np.mean(dist) > bufferDist: continue
+		
+					# If the two tracks survived the process, join them 'cause clearly they're meant to be together ;-)
+					removed[k] = track2
+					#print removed[:]
+					merged += 1
+					for cell in stormTracks[track2]['cells']:
+						cell['track'] = track1
+						stormTracks[track1]['cells'].append(cell)
+		
+					stormTracks[track1] = theil_sen_single(stormTracks[track1])
+			
+				if counter.value % REPORT_EVERY == 0:
+					print '......' + str(j) + ' of ' + str(totNumTracks) + ' processed for joining......'	
 				
-			join()
+				
+			print 'All tracks have been joined if necessary!'
+			print 'Merged ' + str(merged) + ' tracks\n'
+			
 			# ------ End of Joining process ------ #
 	
 			print 'Finding new clusters after joining...'
@@ -775,15 +786,16 @@ if __name__ == '__main__':
 			print 'New number of clusters: ' + str(totNumTracks)
 	
 			# Break ties (multiple cells assigned to same cluster at same time step)
-			def tieBreak():
-				print '\nBreaking ties...'
-				count = 0
+			print '\nBreaking ties...'
+			
+			def tieBreak(trackSubset):	
 				breaks = 0
-	
-				for track in stormTracks:
+				for track in trackSubset:
 					if len(stormTracks[track]['cells']) < 2: 
-						if count % REPORT_EVERY == 0: print '......' + str(count) + ' of ' + str(totNumTracks) + ' tracks processed for ties......'
-						count += 1
+						lock.acquire()
+						if counter.value % REPORT_EVERY == 0: print '......' + str(counter.value) + ' of ' + str(totNumTracks) + ' tracks processed for ties......'
+						counter.value += 1
+						lock.release()
 						continue
 		
 					# Map all cells to their times
@@ -817,22 +829,56 @@ if __name__ == '__main__':
 									stormCells[stormCells.keys()[stormCells.values().index(cell)]]['track'] = 'NaN'
 						
 							breaks += 1
-						
-					if count % REPORT_EVERY == 0:
-						print '......' + str(count) + ' of ' + str(totNumTracks) + ' tracks processed for ties......'
-					count += 1
+							
+					lock.acquire()	
+					if counter.value % REPORT_EVERY == 0:
+						print '......' + str(counter.value) + ' of ' + str(totNumTracks) + ' tracks processed for ties......'
+					counter.value += 1
+					lock.release()
+					
+				return [breaks, stormCells]
 			
-				print 'All tracks have been processed for tie breaks'
-				print 'Number of tie breaks: ' + str(breaks)
-	
-				# Quit iterating if no more changes
-				#if breaks == 0 and merged == 0 and changedCells == 0:
-				#	print 'No additional iterations necessary. Breaking early...'
-				#	break
-
-			tieBreak()	
+			# Determine the number of cells per process
+			subsets = []
+			numPerProc = int(np.ceil(float(len(stormTracks.keys())) / multiprocessing.cpu_count()))
+			for k in xrange(0, len(stormTracks.keys()), numPerProc):
+				temp = {}
+				for key in stormTracks.keys()[k:k + numPerProc]:
+					temp[key] = stormTracks[key]
+				subsets.append(temp)
+			del temp
+			
+			# Split processing over avilable cores
+			l = Lock()
+			counter = Value('i', 0)
+			with closing(Pool(initializer = init, initargs = (l,counter), processes=None)) as pool:
+				results = [pool.apply_async(tieBreak, (subsets[l],)) for l in range(len(subsets))]
+				breaks = sum([result.get()[0] for result in results])
+				stormCells = {}
+				for result in results:
+					for key in result.get()[1]:
+						stormCells[key] = result.get()[1][key]
+				
+				del results
+				del subsets
+				
+				pool.close()
+				pool.join()
+				pool.terminate()
+					
+			print 'All tracks have been processed for tie breaks'
+			print 'Number of tie breaks: ' + str(breaks)
+				
 			# ------ End of Main iteration ------ #
-	
+		
+		print 'Finding new clusters after breakup...'
+		lastNumTracks = len(stormTracks)
+		stormTracks = find_clusters(stormCells, activeCells)
+		stormTracks = theil_sen_batch(stormTracks)
+		totNumTracks = len(stormTracks)
+		print 'Original number of clusters: ' + str(lastNumTracks)
+		print 'New number of clusters: ' + str(totNumTracks)
+		
 		# Remove clusters with too few cells
 		print '\nRemoving clusters with too few cells...'
 		numRemoved = 0
@@ -841,14 +887,14 @@ if __name__ == '__main__':
 				for cell in stormTracks[track]['cells']:
 					cell['track'] = 'NaN'
 				numRemoved += 1
-
-		print 'Number of removed tracks: ' + str(numRemoved + 1)
 		lastNumTracks = len(stormTracks)
 
 		print '\nPerforming final cluster identification...'
 		stormTracks = find_clusters(stormCells, activeCells)
-		stormTracks = theil_sen_batch(stormTracks)
+		stormTracks = theil_sen_batch(stormTracks)				
 		stormTracks.pop('NaN', None)
+
+		print 'Number of removed tracks: ' + str(numRemoved + 1)
 		print 'Original number of clusters: ' + str(lastNumTracks)
 		print 'New number of clusters: ' + str(len(stormTracks))
 
@@ -973,16 +1019,19 @@ if __name__ == '__main__':
 			if bigData:
 				if stormTracks[track]['t0'].date() != date and stormTracks[track]['tend'].date() != date:
 					removeTracks.append(track)
+					if stormTracks.keys().index(track) % REPORT_EVERY == 0: print '......' + str(stormTracks.keys().index(track)) + ' of ' + str(totNumTracks) + ' tracks processed......'
 					continue
 		
 			# Get start time and age
 			# Convert all datetimes to str for JSON
 			times = []
 			cells = []
+			
 			for cell in stormTracks[track]['cells']:
 				cell['start_time'] = stormTracks[track]['t0']
 				cell['age'] = (cell['time'] - cell['start_time']).total_seconds()
 				times.append(cell['time'])
+			
 			
 			# Sort cells by time	
 			times = sorted(np.unique(times))
@@ -1040,9 +1089,11 @@ if __name__ == '__main__':
 			stormTracks[track].pop('xf', None)
 			stormTracks[track].pop('yf', None)
 			
+			if stormTracks.keys().index(track) % REPORT_EVERY == 0: print '......' + str(stormTracks.keys().index(track)) + ' of ' + str(totNumTracks) + ' tracks processed......'
+			
 		# Remove tracks not part of this date
 		if bigData:
-			print 'Removing ' + str(len(removeTracks)) + ' invalid clusters...'
+			print '\nRemoving ' + str(len(removeTracks)) + ' invalid clusters...'
 			for track in removeTracks:
 				stormTracks.pop(track, None)
 			print 'New number of clusters: ' + str(len(stormTracks))
@@ -1080,7 +1131,7 @@ if __name__ == '__main__':
 				for track in stormTracks:
 					for cell in stormTracks[track]['cells']:
 						cells[cell] = activeStormCells[cell]
-				print 'Printing ' + filename
+				print '\nPrinting ' + filename
 				with open(outDir + '/' + filename, 'w') as outfile:
 					json.dump(cells, outfile, sort_keys = True, indent = 0)
 					
@@ -1139,5 +1190,5 @@ if __name__ == '__main__':
 			stormCells[cell]['y'] = m(stormCells[cell]['lon'], stormCells[cell]['lat'])[1]
 			stormCells[cell]['time'] = datetime.datetime.strptime(str(stormCells[cell]['time']), '%Y-%m-%d %H:%M:%S')
 
-	print '\n\nBest Track has completed succesfully!\n\n'
+	print '\n\nBest Track has completed succesfully!\n\n\n\n'
 	
