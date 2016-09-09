@@ -727,93 +727,76 @@ if __name__ == '__main__':
             totNumTracks = len(tracks)
             merged = 0
 
-
-            def compareTracksJoin(track1, track2):
-                # if len(stormTracks[track2]['cells']) < 2: continue
-                if track2 in removeTracks: return
-                if track2 == 'NaN': return
-                if len(stormTracks[track2]['cells']) < 2: return
-
-                # Check time gap between tracks
-                if stormTracks[track1]['t0'] > stormTracks[track2]['t0']:
-                    earlyIndex = track2
-                    lateIndex = track1
-                else:
-                    earlyIndex = track1
-                    lateIndex = track2
-                timeDiff = stormTracks[lateIndex]['t0'] - stormTracks[earlyIndex]['tend']
-                if abs(timeDiff.total_seconds()) > joinTime.total_seconds: return
-
-                # Check distance between tracks
-                x1 = stormTracks[earlyIndex]['xf']
-                y1 = stormTracks[earlyIndex]['yf']
-                x2 = stormTracks[lateIndex]['x0']
-                y2 = stormTracks[lateIndex]['y0']
-
-                dist = np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
-                dist = dist * distanceRatio
-
-                # Limit track join distance
-                if dist > joinDist: return
-
-                # Check velocity difference between tracks
-                u1 = stormTracks[earlyIndex]['u'] * distanceRatio  # Km / s
-                v1 = stormTracks[earlyIndex]['v'] * distanceRatio  # Km / s
-                u2 = stormTracks[lateIndex]['u'] * distanceRatio  # Km / s
-                v2 = stormTracks[lateIndex]['v'] * distanceRatio  # Km / s
-
-                velocityDiff = np.sqrt((u1 - u2) ** 2 + (v1 - v2) ** 2)
-                if velocityDiff > float(bufferDist) / bufferTime.total_seconds(): return
-
-                # Check if track predictions are close enough
-                dist = []
-                for cell in stormTracks[lateIndex]['cells']:
-                    xActual = cell['x']
-                    yActual = cell['y']
-
-                    cellTime = cell['time']
-                    xPredict = stormTracks[earlyIndex]['xf'] + (
-                    stormTracks[earlyIndex]['u'] * ((cellTime - stormTracks[earlyIndex]['tend']).total_seconds()))
-                    yPredict = stormTracks[earlyIndex]['yf'] + (
-                    stormTracks[earlyIndex]['v'] * ((cellTime - stormTracks[earlyIndex]['tend']).total_seconds()))
-
-                    dist.append(np.sqrt((xPredict - xActual) ** 2 + (yPredict - yActual) ** 2) * distanceRatio)
-
-                if np.mean(dist) > bufferDist: return
-
-                # If the two tracks survived the process, join them 'cause clearly they're meant to be together ;-)
-                removeTracks.append(track2)
-                if not track1 in mergedTracks: mergedTracks.append(track1)
-                for cell in stormTracks[track2]['cells']:
-                    cell['track'] = track1
-                    stormTracks[track1]['cells'].append(cell)
-
-                stormTracks[track1] = theil_sen_single(stormTracks[track1])
-
-
-            for j in range(0, len(tracks)):
-                track1 = tracks[j]
-
-                # Skip tracks with only 1 cell
-                if len(stormTracks[track1]['cells']) < 2:
-                    if j % REPORT_EVERY == 0: print '......' + str(j) + ' of ' + str(
-                        totNumTracks) + ' processed for joining......'
-                    continue
-                if track1 == 'NaN':
-                    if j % REPORT_EVERY == 0: print '......' + str(j) + ' of ' + str(
-                        totNumTracks) + ' processed for joining......'
-                    continue
-
-                for k in range(j + 1, len(tracks)):
-                    track2 = tracks[k]
-                    compareTracksJoin(track1, track2)
-
-                for k in mergedTracks:
-                    if track1 in mergedTracks: break
-                    if track1 in removeTracks: break
-                    track2 = k
-                    compareTracksJoin(track1, track2)
-
+			for j in range(0, len(tracks)):
+				track1 = tracks[j]
+		
+				# Skip tracks with only 1 cell
+				if len(stormTracks[track1]['cells']) < 2:
+					if j % REPORT_EVERY == 0: print '......' + str(j) + ' of ' + str(totNumTracks) + ' processed for joining......'
+					continue
+				if track1 == 'NaN': continue
+		
+				for k in range(0, j - 1):
+					track2 = tracks[k]
+			
+					#if len(stormTracks[track2]['cells']) < 2: continue
+					if track2 in removeTracks: continue
+					if track2 == 'NaN': continue
+					if len(stormTracks[track2]['cells']) < 2: continue
+			
+					# Check time gap between tracks
+					if stormTracks[track1]['t0'] > stormTracks[track2]['t0']:
+						earlyIndex = track2
+						lateIndex = track1
+					else:
+						earlyIndex = track1
+						lateIndex = track2
+					timeDiff = stormTracks[lateIndex]['t0'] - stormTracks[earlyIndex]['tend']
+					if abs(timeDiff.total_seconds()) > joinTime.total_seconds: continue
+			
+					# Check distance between tracks
+					x1 = stormTracks[earlyIndex]['xf']
+					y1 = stormTracks[earlyIndex]['yf']
+					x2 = stormTracks[lateIndex]['x0']
+					y2 = stormTracks[lateIndex]['y0']
+			
+					dist = np.sqrt((x1-x2)**2 + (y1 - y2)**2)
+					dist = dist * distanceRatio
+			
+					# Limit track join distance
+					if dist > joinDist: continue
+			
+					# Check velocity difference between tracks
+					u1 = stormTracks[earlyIndex]['u'] * distanceRatio # Km / s
+					v1 = stormTracks[earlyIndex]['v'] * distanceRatio # Km / s
+					u2 = stormTracks[lateIndex]['u'] * distanceRatio  # Km / s
+					v2 = stormTracks[lateIndex]['v'] * distanceRatio  # Km / s
+		
+					velocityDiff = np.sqrt((u1 - u2)**2 + (v1 - v2)**2)
+					if velocityDiff > float(bufferDist) / bufferTime.total_seconds(): continue
+			
+					# Check if track predictions are close enough				
+					dist = []
+					for cell in stormTracks[lateIndex]['cells']:
+						xActual = cell['x']
+						yActual = cell['y']
+			
+						cellTime = cell['time']
+						xPredict = stormTracks[earlyIndex]['xf'] + (stormTracks[earlyIndex]['u'] * ((cellTime - stormTracks[earlyIndex]['tend']).total_seconds()))
+						yPredict = stormTracks[earlyIndex]['yf'] + (stormTracks[earlyIndex]['v'] * ((cellTime - stormTracks[earlyIndex]['tend']).total_seconds()))
+			
+						dist.append(np.sqrt((xPredict - xActual)**2 + (yPredict - yActual)**2) * distanceRatio)
+			
+					if np.mean(dist) > bufferDist: continue
+			
+					# If the two tracks survived the process, join them 'cause clearly they're meant to be together ;-)
+					removeTracks.append(track2)
+					for cell in stormTracks[track2]['cells']:
+						cell['track'] = track1
+						stormTracks[track1]['cells'].append(cell)
+			
+					stormTracks[track1] = theil_sen_single(stormTracks[track1])
+					
                 if j % REPORT_EVERY == 0:
                     print '......' + str(j) + ' of ' + str(totNumTracks) + ' processed for joining......'
 
@@ -833,7 +816,6 @@ if __name__ == '__main__':
 
             # Break ties (multiple cells assigned to same cluster at same time step)
             print '\nBreaking ties...'
-
 
             def tieBreak(trackSubset):
                 breaks = 0
