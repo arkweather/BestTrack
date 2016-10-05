@@ -574,12 +574,14 @@ if __name__ == '__main__':
 
 	print 'Beginning Calculations...'
 	REPORT_EVERY = 1000
-	scOrigin = copy.deepcopy(stormCells)
+	if mapResults: scOrigin = copy.deepcopy(stormCells)
 	oldCells = []
+	total_seconds = datetime.timedelta.total_seconds
 
 	# Run the whole thing for each date
 	# Note this will only run once if not bigData (break at end)
 	for date in np.unique(dates):
+		runstart = datetime.datetime.now()
 		dt = datetime.timedelta(hours=6)
 		activeCells = []
 
@@ -641,10 +643,8 @@ if __name__ == '__main__':
 								xPoint = stormTracks[track]['x0']
 								yPoint = stormTracks[track]['y0']
 							else:
-								xPoint = stormTracks[track]['x0'] + (
-								stormTracks[track]['u'] * ((cellTime - stormTracks[track]['t0']).total_seconds()))
-								yPoint = stormTracks[track]['y0'] + (
-								stormTracks[track]['v'] * ((cellTime - stormTracks[track]['t0']).total_seconds()))
+								xPoint = stormTracks[track]['x0'] + (stormTracks[track]['u'] * (total_seconds(cellTime - stormTracks[track]['t0'])))
+								yPoint = stormTracks[track]['y0'] + (stormTracks[track]['v'] * (total_seconds(cellTime - stormTracks[track]['t0'])))
 
 							dist = np.sqrt((cellX - xPoint) ** 2 + (cellY - yPoint) ** 2)
 							dist = dist * distanceRatio  # Convert from x,y to km
@@ -684,10 +684,9 @@ if __name__ == '__main__':
 				# Split processing over avilable cores
 				l = Lock()
 				counter = Value('i', 0)
-				with closing(Pool(initializer=init, initargs=(l, counter), processes=None)) as pool:
+				with closing(Pool(initializer=init, initargs=(l, counter), processes=20, maxtasksperchild = 1)) as pool:
 					results = [pool.apply_async(breakupCells, (subsets[l],)) for l in range(len(subsets))]
 					changedCells = sum([result.get()[0] for result in results])
-					stormCells = {}
 					for result in results:
 						for key in result.get()[1]:
 							stormCells[key] = result.get()[1][key]
@@ -721,13 +720,12 @@ if __name__ == '__main__':
 
 			# Join similar clusters
 			print 'Joining similar clusters...'
-			removeTracks = []
-			mergedTracks = []
 			tracks = sorted(stormTracks.keys())
 			totNumTracks = len(tracks)
+			removeTracks = np.zeros(totNumTracks, dtype = bool)
 			merged = 0
 
-			for j in range(0, len(tracks)):
+			for j in range(0, totNumTracks):
 				track1 = tracks[j]
 
 				# Skip tracks with only 1 cell
@@ -740,7 +738,7 @@ if __name__ == '__main__':
 					track2 = tracks[k]
 
 					#if len(stormTracks[track2]['cells']) < 2: continue
-					if track2 in removeTracks: continue
+					if removeTracks[k]: continue
 					if track2 == 'NaN': continue
 					if len(stormTracks[track2]['cells']) < 2: continue
 
@@ -752,7 +750,7 @@ if __name__ == '__main__':
 						earlyIndex = track1
 						lateIndex = track2
 					timeDiff = stormTracks[lateIndex]['t0'] - stormTracks[earlyIndex]['tend']
-					if abs(timeDiff.total_seconds()) > joinTime.total_seconds: continue
+					if abs(total_seconds(timeDiff)) > total_seconds(joinTime): continue
 			
 					# Check distance between tracks
 					x1 = stormTracks[earlyIndex]['xf']
@@ -773,24 +771,27 @@ if __name__ == '__main__':
 					v2 = stormTracks[lateIndex]['v'] * distanceRatio  # Km / s
 
 					velocityDiff = np.sqrt((u1 - u2)**2 + (v1 - v2)**2)
-					if velocityDiff > float(bufferDist) / bufferTime.total_seconds(): continue
+					if velocityDiff > float(bufferDist) / total_seconds(bufferTime): continue
 			
-					# Check if track predictions are close enough				
-					dist = []
-					for cell in stormTracks[lateIndex]['cells']:
+					# Check if track predictions are close enough using a subset of 5 cells (or fewer)				
+					dist = [None] * len(stormTracks[lateIndex]['cells'][0:6])
+					index = 0
+					for cell in stormTracks[lateIndex]['cells'][0:6]:
 						xActual = cell['x']
 						yActual = cell['y']
 
 						cellTime = cell['time']
-						xPredict = stormTracks[earlyIndex]['xf'] + (stormTracks[earlyIndex]['u'] * ((cellTime - stormTracks[earlyIndex]['tend']).total_seconds()))
-						yPredict = stormTracks[earlyIndex]['yf'] + (stormTracks[earlyIndex]['v'] * ((cellTime - stormTracks[earlyIndex]['tend']).total_seconds()))
+						xPredict = stormTracks[earlyIndex]['xf'] + (stormTracks[earlyIndex]['u'] * (total_seconds(cellTime - stormTracks[earlyIndex]['tend'])))
+						yPredict = stormTracks[earlyIndex]['yf'] + (stormTracks[earlyIndex]['v'] * (total_seconds(cellTime - stormTracks[earlyIndex]['tend'])))
 
-						dist.append(np.sqrt((xPredict - xActual)**2 + (yPredict - yActual)**2) * distanceRatio)
-
+						dist[index] = np.sqrt((xPredict - xActual)**2 + (yPredict - yActual)**2) * distanceRatio
+						index += 1
+						
 					if np.mean(dist) > bufferDist: continue
 			
 					# If the two tracks survived the process, join them 'cause clearly they're meant to be together ;-)
-					removeTracks.append(track2)
+					removeTracks[k] = True
+					merged += 1
 					for cell in stormTracks[track2]['cells']:
 						cell['track'] = track1
 						stormTracks[track1]['cells'].append(cell)
@@ -800,7 +801,9 @@ if __name__ == '__main__':
 				if j % REPORT_EVERY == 0:
 					print '......' + str(j) + ' of ' + str(totNumTracks) + ' processed for joining......'
 
-			merged = len(removeTracks)
+			del tracks
+			del removeTracks
+			
 			print 'All tracks have been joined if necessary!'
 			print 'Merged ' + str(merged) + ' tracks\n'
 
@@ -822,8 +825,7 @@ if __name__ == '__main__':
 				for track in trackSubset:
 					if len(stormTracks[track]['cells']) < 2:
 						lock.acquire()
-						if counter.value % REPORT_EVERY == 0: print '......' + str(counter.value) + ' of ' + str(
-						    totNumTracks) + ' tracks processed for ties......'
+						if counter.value % REPORT_EVERY == 0: print '......' + str(counter.value) + ' of ' + str(totNumTracks) + ' tracks processed for ties......'
 						counter.value += 1
 						lock.release()
 						continue
@@ -838,7 +840,7 @@ if __name__ == '__main__':
 
 					# Get duplicate times
 					for thisTime in times:
-						cells = []
+						
 						if len(times[thisTime]) > 1:
 							cells = times[thisTime]
 
@@ -847,10 +849,8 @@ if __name__ == '__main__':
 							for cell in cells:
 								cellX = cell['x']
 								cellY = cell['y']
-								xPredict = stormTracks[track]['x0'] + (
-								stormTracks[track]['u'] * ((thisTime - stormTracks[track]['t0']).total_seconds()))
-								yPredict = stormTracks[track]['y0'] + (
-								stormTracks[track]['v'] * ((thisTime - stormTracks[track]['t0']).total_seconds()))
+								xPredict = stormTracks[track]['x0'] + (stormTracks[track]['u'] * (total_seconds(thisTime - stormTracks[track]['t0'])))
+								yPredict = stormTracks[track]['y0'] + (stormTracks[track]['v'] * (total_seconds(thisTime - stormTracks[track]['t0'])))
 
 								dist.append(np.sqrt((xPredict - cellX) ** 2 + (yPredict - cellY) ** 2) * distanceRatio)
 
@@ -858,14 +858,13 @@ if __name__ == '__main__':
 							for cell in cells:
 								if cell != minCell:
 									stormTracks[track]['cells'].remove(cell)
-									stormCells[stormCells.keys()[stormCells.values().index(cell)]]['track'] = 'NaN'
+									cell['track'] = 'NaN'
 
 							breaks += 1
 
 					lock.acquire()
 					if counter.value % REPORT_EVERY == 0:
-						print '......' + str(counter.value) + ' of ' + str(
-							totNumTracks) + ' tracks processed for ties......'
+						print '......' + str(counter.value) + ' of ' + str(totNumTracks) + ' tracks processed for ties......'
 					counter.value += 1
 					lock.release()
 
@@ -885,10 +884,9 @@ if __name__ == '__main__':
 			# Split processing over avilable cores
 			l = Lock()
 			counter = Value('i', 0)
-			with closing(Pool(initializer=init, initargs=(l, counter), processes=None)) as pool:
+			with closing(Pool(initializer=init, initargs=(l, counter), processes=20, maxtasksperchild = 1)) as pool:
 				results = [pool.apply_async(tieBreak, (subsets[l],)) for l in range(len(subsets))]
 				breaks = sum([result.get()[0] for result in results])
-				stormCells = {}
 				for result in results:
 					for key in result.get()[1]:
 						stormCells[key] = result.get()[1][key]
@@ -1053,8 +1051,7 @@ if __name__ == '__main__':
 			if bigData:
 				if stormTracks[track]['t0'].date() != date and stormTracks[track]['tend'].date() != date:
 					removeTracks.append(track)
-					if stormTracks.keys().index(track) % REPORT_EVERY == 0: print '......' + str(
-						stormTracks.keys().index(track)) + ' of ' + str(totNumTracks) + ' tracks processed......'
+					if stormTracks.keys().index(track) % REPORT_EVERY == 0: print '......' + str(stormTracks.keys().index(track)) + ' of ' + str(len(stormTracks)) + ' tracks processed......'
 					continue
 
 			# Get start time and age
@@ -1064,7 +1061,7 @@ if __name__ == '__main__':
 
 			for cell in stormTracks[track]['cells']:
 				cell['start_time'] = stormTracks[track]['t0']
-				cell['age'] = (cell['time'] - cell['start_time']).total_seconds()
+				cell['age'] = total_seconds(cell['time'] - cell['start_time'])
 				times.append(cell['time'])
 
 			# Sort cells by time
@@ -1087,10 +1084,8 @@ if __name__ == '__main__':
 					prevY = cells[index - 1]['y']
 					prevTime = cells[index - 1]['time']
 
-					cell['motion_east'] = (cell['x'] - prevX) / (
-					(cell['time'] - prevTime).total_seconds()) * distanceRatio * 1000  # m/s
-					cell['motion_south'] = -1 * (cell['y'] - prevY) / (
-					(cell['time'] - prevTime).total_seconds()) * distanceRatio * 1000  # m/s
+					cell['motion_east'] = (cell['x'] - prevX) / (total_seconds(cell['time'] - prevTime)) * distanceRatio * 1000  # m/s
+					cell['motion_south'] = -1 * (cell['y'] - prevY) / (total_seconds(cell['time'] - prevTime)) * distanceRatio * 1000  # m/s
 
 				cell['speed'] = np.sqrt(cell['motion_east'] ** 2 + cell['motion_south'] ** 2)
 
@@ -1114,10 +1109,8 @@ if __name__ == '__main__':
 			stormTracks[track]['tend'] = str(stormTracks[track]['tend'])
 
 			# Convert x, y back to lon, lat and km/s to m/s
-			stormTracks[track]['lon0'], stormTracks[track]['lat0'] = m(stormTracks[track]['x0'],
-						                                               stormTracks[track]['y0'], inverse=True)
-			stormTracks[track]['lonf'], stormTracks[track]['latf'] = m(stormTracks[track]['xf'],
-						                                               stormTracks[track]['yf'], inverse=True)
+			stormTracks[track]['lon0'], stormTracks[track]['lat0'] = m(stormTracks[track]['x0'], stormTracks[track]['y0'], inverse=True)
+			stormTracks[track]['lonf'], stormTracks[track]['latf'] = m(stormTracks[track]['xf'], stormTracks[track]['yf'], inverse=True)
 			stormTracks[track]['u'] = stormTracks[track]['u'] * distanceRatio * 1000  # m/s
 			stormTracks[track]['v'] = stormTracks[track]['v'] * distanceRatio * 1000  # m/s
 
@@ -1127,13 +1120,12 @@ if __name__ == '__main__':
 			stormTracks[track].pop('xf', None)
 			stormTracks[track].pop('yf', None)
 
-			if stormTracks.keys().index(track) % REPORT_EVERY == 0: print '......' + str(
-				stormTracks.keys().index(track)) + ' of ' + str(totNumTracks) + ' tracks processed......'
+			if stormTracks.keys().index(track) % REPORT_EVERY == 0: print '......' + str(stormTracks.keys().index(track)) + ' of ' + str(totNumTracks) + ' tracks processed......'
 
 		# Remove tracks not part of this date
 		if bigData:
 			print '\nRemoving ' + str(len(removeTracks)) + ' invalid clusters...'
-			for track in removeTracks:
+			for track in removeTracks: 
 				stormTracks.pop(track, None)
 			print 'New number of clusters: ' + str(len(stormTracks))
 
@@ -1192,8 +1184,7 @@ if __name__ == '__main__':
 					json.dump(stormTracks, outfile, sort_keys=True, indent=0)
 			else:
 				filename = (str(startTime.year) + str(startTime.month).zfill(2) + str(startTime.day).zfill(2) + '_' +
-			    			str(endTime.year) + str(endTime.month).zfill(2) + str(endTime.day).zfill(
-							2) + '_tracks.data')
+			    			str(endTime.year) + str(endTime.month).zfill(2) + str(endTime.day).zfill(2) + '_tracks.data')
 				print 'Printing ' + filename
 				with open(outDir + '/' + filename, 'w') as outfile:
 					json.dump(stormTracks, outfile, sort_keys=True, indent=0)
@@ -1206,21 +1197,22 @@ if __name__ == '__main__':
 		else:
 			filename = (str(startTime.year) + str(startTime.month).zfill(2) + str(startTime.day).zfill(2) + '_' +
         				str(endTime.year) + str(endTime.month).zfill(2) + str(endTime.day).zfill(2) + '.meta')
-			print 'Printing ' + filename + '\n\n'
-			f = open(outDir + '/' + filename, 'w')
-			f.write('Start Time: ' + str(startTime) + '\n')
-			f.write('End Time: ' + str(endTime) + '\n')
-			f.write('File Type: ' + fType + '\n')
-			f.write('Buffer Distance: ' + str(bufferDist) + '\n')
-			f.write('Buffer Time: ' + str(bufferTime) + '\n')
-			f.write('Join Distance: ' + str(joinDist) + '\n')
-			f.write('Join Time: ' + str(joinTime) + '\n')
-			f.write('Min Cells per Track: ' + str(minCells) + '\n')
-			f.write('Main Iterations: ' + str(mainIters) + '\n')
-			f.write('Breakup Iterations: ' + str(breakIters) + '\n')
-			f.write('Number of Cells: ' + str(len(activeCells)) + '\n')
-			f.write('Completed: ' + str(datetime.datetime.now()))
-			f.close()
+		print 'Printing ' + filename + '\n\n'
+		f = open(outDir + '/' + filename, 'w')
+		f.write('Run Start: ' + str(runstart) + '\n')
+		f.write('Start Time: ' + str(startTime) + '\n')
+		f.write('End Time: ' + str(endTime) + '\n')
+		f.write('File Type: ' + fType + '\n')
+		f.write('Buffer Distance: ' + str(bufferDist) + '\n')
+		f.write('Buffer Time: ' + str(bufferTime) + '\n')
+		f.write('Join Distance: ' + str(joinDist) + '\n')
+		f.write('Join Time: ' + str(joinTime) + '\n')
+		f.write('Min Cells per Track: ' + str(minCells) + '\n')
+		f.write('Main Iterations: ' + str(mainIters) + '\n')
+		f.write('Breakup Iterations: ' + str(breakIters) + '\n')
+		f.write('Number of Cells: ' + str(len(activeCells)) + '\n')
+		f.write('Completed: ' + str(datetime.datetime.now()))
+		f.close()
 
 		# Don't do it again if not bigData
 		if not bigData: break
