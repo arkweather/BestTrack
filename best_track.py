@@ -620,6 +620,7 @@ if __name__ == '__main__':
 				# process, so each process returns the modified subset
 				# of stormCells to be rejoined later
 				def breakupCells(cellSubset):
+					
 					changedCells = 0
 
 					for cell in cellSubset:
@@ -819,9 +820,12 @@ if __name__ == '__main__':
 
 			# Break ties (multiple cells assigned to same cluster at same time step)
 			print '\nBreaking ties...'
-
+			
 			def tieBreak(trackSubset):
+				
 				breaks = 0
+				modifiedCells = {}
+				
 				for track in trackSubset:
 					if len(stormTracks[track]['cells']) < 2:
 						lock.acquire()
@@ -859,7 +863,8 @@ if __name__ == '__main__':
 								if cell != minCell:
 									stormTracks[track]['cells'].remove(cell)
 									cell['track'] = 'NaN'
-
+									modifiedCells[stormCells.keys()[stormCells.values().index(cell)]] = cell
+								
 							breaks += 1
 
 					lock.acquire()
@@ -867,10 +872,9 @@ if __name__ == '__main__':
 						print '......' + str(counter.value) + ' of ' + str(totNumTracks) + ' tracks processed for ties......'
 					counter.value += 1
 					lock.release()
-
-				return [breaks, stormCells]
-
-
+				
+				return [breaks, modifiedCells]
+			
 			# Determine the number of cells per process
 			subsets = []
 			numPerProc = int(np.ceil(float(len(stormTracks.keys())) / multiprocessing.cpu_count()))
@@ -897,7 +901,7 @@ if __name__ == '__main__':
 				pool.close()
 				pool.join()
 				pool.terminate()
-
+			
 			print 'All tracks have been processed for tie breaks'
 			print 'Number of tie breaks: ' + str(breaks)
 
