@@ -349,8 +349,8 @@ def theil_sen_single(track):
 		track['yf'] = theilSenDataY[1] + theilSenDataY[0] * (max(times))
 
 	else:
-		stormTracks[track]['u'] = 0
-		stormTracks[track]['v'] = 0
+		track['u'] = 0
+		track['v'] = 0
 		track['t0'] = datetime.datetime.fromtimestamp(min(times))
 		track['tend'] = datetime.datetime.fromtimestamp(max(times))
 		track['x0'] = track['cells'][times.index(min(times))]['x']
