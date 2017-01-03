@@ -491,6 +491,8 @@ if __name__ == '__main__':
 	print '\nRunning for times ' + str(startTime) + ' through ' + str(endTime)
 
 	print STARS
+	
+	# TODO:  Everything below here should be in a function (I think)
 
     #==================================================================================================================#
     #                                                                                                                  #
