@@ -1,13 +1,15 @@
-## @package best_track
-# Concatenates storm tracks from w2segmotionll, probSevere, and post-processed .data (Ryan) files.
-#
-# This package is approximately equivalent to w2besttrack with the 
-# potential for additional features and greater flexibility.
-# This python version was converted from Ryan Lagerquist's MATLAB code
-# ryan_best_tracks.m and associated files.
-#
-# @author David Harrison
-# @date July 2016
+"""
+ Concatenates storm tracks from w2segmotionll, probSevere, and post-processed .data (Ryan) files.
+
+ This package is approximately equivalent to w2besttrack with the 
+ potential for additional features and greater flexibility.
+ This python version was converted from Ryan Lagerquist's MATLAB code
+ ryan_best_tracks.m and associated files.
+
+ Author :	David Harrison
+ Date   :	July 2016
+
+"""
 
 import argparse
 import socket
@@ -30,22 +32,19 @@ import multiprocessing
 import ctypes
 from contextlib import closing
 
-## @name Best-track constants
-## @{ 
-MAX_BUFFER_DIST = 20  # Buffer distance [km].  0.1 deg in w2besttrack.
-MAX_BUFFER_TIME = 21  # Buffer time [min].  10 min in w2besttrack.
-MAX_JOIN_TIME = 21  # Buffer time for joining Theil-Sen trajectories [min].  15 min in w2besttrack.
-MAX_JOIN_DIST = 70  # Buffer distance for joining Theil-Sen trajectories [km].
-MIN_MIN_CELLS = 2  # Min min number storm cells per track.
-MAX_MIN_CELLS = 12  # Max min number storm cells per track.
-MIN_ITERS = 3  # Number of outside iterations.
-MAX_ITERS = 25  # Number of outside iterations.
-MIN_BREAKUP_ITERS = 1  # Number of break-up iterations.
-MAX_BREAKUP_ITERS = 5  # Number of break-up iterations.
-## @}
+# Best-track constants 
+MAX_BUFFER_DIST = 20  	# Buffer distance [km].  0.1 deg in w2besttrack.
+MAX_BUFFER_TIME = 21  	# Buffer time [min].  10 min in w2besttrack.
+MAX_JOIN_TIME = 21  	# Buffer time for joining Theil-Sen trajectories [min].  15 min in w2besttrack.
+MAX_JOIN_DIST = 70  	# Buffer distance for joining Theil-Sen trajectories [km].
+MIN_MIN_CELLS = 2  		# Min min number storm cells per track.
+MAX_MIN_CELLS = 12  	# Max min number storm cells per track.
+MIN_ITERS = 3  			# Number of outside iterations.
+MAX_ITERS = 25  		# Number of outside iterations.
+MIN_BREAKUP_ITERS = 1  	# Number of break-up iterations.
+MAX_BREAKUP_ITERS = 5  	# Number of break-up iterations.
 
-## @name Mapping constants
-## @{
+# Mapping constants
 MIN_LAT = 20
 MAX_LAT = 51
 MIN_LON = -119
@@ -53,21 +52,26 @@ MAX_LON = -62
 
 BEFORE_WIDTH = 4
 AFTER_WIDTH = 2
-## @}
 FONT_SIZE = 12
 
-## @name Other constants
-## @{
+# Other constants
 TOLERANCE = 1e-9
 MAX_MISSING = 10
 DASHES = '\n' + '-' * 80 + '\n\n'
 STARS = '\n' + '*' * 80 + '\n\n'
 
 
-## @}
-
-## Retrieve the user-speficified command line arguments
 def getOptions():
+	"""
+	Retrieve the user-speficified command line arguments
+	
+	Returns
+	--------
+	Namespace
+		Namespace of parsed arguments returned by ArgumentParser.parse_args()
+			
+	"""
+
 	# Load default values from config file
 	try:
 		f = open('best_track.config')
@@ -132,10 +136,19 @@ def getOptions():
 	return args
 
 
-## Check the user-specified command line arguments for errors not handled by argparse.
-## Errors will print to console before terminating the script.
-## @param args A dictionary of user-specified arguments
 def checkArgs(args):
+	"""
+	Check the user-specified command line arguments for errors not handled by argparse.
+	
+	Errors will print to console before terminating the script.
+	
+	Parameters
+	----------
+	args: Namespace
+		Namespace of user-specified arguments returned from getOptions()
+				
+	"""
+
 	startTime = args['start_time']
 	endTime = args['end_time']
 	inSuffix = args['dir_suffix']
@@ -307,10 +320,23 @@ def checkArgs(args):
 #		
 #	else: print 'Mapping disabled'
 
-## Groups cells with the same track ID into a track dictionary
-## @param stormCells Dictionary of storm cells
-## @returns stormTracks Dictionary of storm tracks containing storm cells {ID: [cells]}
+
 def find_clusters(stormCells, activeCells):
+	"""
+	Groups cells with the same track ID into a track dictionary
+	
+	Parameters
+	----------	
+	stormCells :  Dictionary 
+		Dictionary of storm cells
+		
+	Returns
+	-------
+	Dictionary
+		Dictionary of storm tracks containing storm cells {ID: [cells]}
+	
+	"""
+
 	stormTracks = {}
 	for cell in activeCells:
 		track = stormCells[cell]['track']
@@ -322,11 +348,25 @@ def find_clusters(stormCells, activeCells):
 	return stormTracks
 
 
-## Computes the Theil-Sen fit for a single storm track.
-## See theil_sen_batch() for more detail.
-## @param track The value of a single track within the storm track dictionary 
-## @returns a storm track dict value with updated items for the provided track
+
 def theil_sen_single(track):
+	"""
+	Computes the Theil-Sen fit for a single storm track.
+	
+	See theil_sen_batch() for more detail.
+	
+	Parameters
+	----------
+	track : Dictionary
+		The value of a single track within the storm track dictionary
+		
+	Returns
+	-------
+	Dictionary
+		A storm track dict value with updated items for the provided track
+	
+	"""
+
 	times = []
 	x = []
 	y = []
@@ -361,13 +401,25 @@ def theil_sen_single(track):
 	return track
 
 
-## Computes the Theil-Sen fit for each storm track.
-## Sources: http://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.mstats.theilslopes.html 
-##          https://en.wikipedia.org/wiki/Theil%E2%80%93Sen_estimator
-## @param stormTracks A dictionary of track IDs each containing associated storm cells with Lat, Lon, X, Y, and datetime params
-##                  {'ID':{['x', 'y', 'lat', 'lon', 'times', 'track']}}
-## @returns stormTracks Modified with new values 'u', 'v', 't0', 'tend', 'x0', 'y0', 'xf', 'yf'	
 def theil_sen_batch(stormTracks):
+	"""
+	Computes the Theil-Sen fit for each storm track.
+	
+	Sources: http://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.mstats.theilslopes.html 
+	         https://en.wikipedia.org/wiki/Theil%E2%80%93Sen_estimator
+	         
+	Parameters
+	----------
+	stormTracks : Dictionary
+		A dictionary of track IDs each containing associated storm cells with Lat, Lon, X, Y, and datetime params
+        {'ID':{['x', 'y', 'lat', 'lon', 'times', 'track']}}
+        
+    Returns
+    -------
+    Dictionary
+    	stormTracks modified with new values 'u', 'v', 't0', 'tend', 'x0', 'y0', 'xf', 'yf'	
+    	
+	"""
 	for track in stormTracks:
 		times = []
 		x = []
@@ -416,10 +468,18 @@ def theil_sen_batch(stormTracks):
 	return stormTracks
 
 
-## Instantiates global variables for multiprocessing
-## @param l - A multiprocessing.Lock() object to be shared across processes
-## @param c - A multiprocessing.Value('i') object to be shared across processes
+
 def init(l, c):
+	"""
+	Instantiates global variables for multiprocessing
+	
+	Paramters
+	l : multiprocessing.Lock()
+		A multiprocessing.Lock() object to be shared across processes
+	c : multiprocessing.Value()
+		A multiprocessing.Value('i') object to be shared across processes
+		
+	"""
 	global lock
 	global counter
 	lock = l
@@ -446,7 +506,7 @@ if __name__ == '__main__':
 	checkArgs(args)
 
 	## @name Args
-	## Assuming the args check out, save their values here
+	## If the args check out, save their values here
 	## @{
 	startTime = args['start_time']
 	endTime = args['end_time']
@@ -617,7 +677,7 @@ if __name__ == '__main__':
 				print 'Assigning each cell to nearest cluster...'
 
 
-				# Separated into function for multiprocessing
+				# Separated into function for multiprocessing.
 				# Note that global variables are not shared between
 				# process, so each process returns the modified subset
 				# of stormCells to be rejoined later

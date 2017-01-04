@@ -89,7 +89,7 @@ usage: best_track.py [-h] [-i] [-s] [-t] [-bd] [-bt] [-jt] [-jd] [-mc] [-mi]
         
         -ts   --time_step          (No arguments) Flag to specify if output files will be 
                                    broken up by time step.  If used, a file will be created
-                                   or every time stamp in the data (this can get very large
+                                   for every time stamp in the data (this can get very large
                                    if used for more than just a day or two at a time).
                                    Default is to create one file for the entire dataset.
                                    See OUTPUT for details.
@@ -188,7 +188,7 @@ if there are more storm cells than the specified threshold (default 50000), Best
 Track will run in "Big Data Mode".  In this mode, each day will be processed 
 individually and output files (See Output) will be created for each valid date 
 within the specified time range.  This is intended to decrease total runtime
-on very large datasets, but will not reduce the memory usage of the script.
+on very large datasets, but will not necessarily reduce the memory usage of the script.
 CAUTION: Reading in a significant number of files or files with a significant
 number of storm cells may result in poor performance and/or out of memory errors.
 
@@ -317,7 +317,7 @@ from a file, simply do the following (in Python):
 
         import json
         
-        filepath = 'tracks/2013-05-20_2013-05-21_cells.data'
+        filepath = 'tracks/20130520_20130521_cells.data'
         f = open(filepath)
         cells = json.load(f)
         f.close()
