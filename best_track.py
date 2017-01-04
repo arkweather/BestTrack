@@ -505,9 +505,7 @@ if __name__ == '__main__':
 	# Check user input.  Type casting is handled by argparse.
 	checkArgs(args)
 
-	## @name Args
-	## If the args check out, save their values here
-	## @{
+	# If the args check out, save their values here
 	startTime = args['start_time']
 	endTime = args['end_time']
 	inDir = args['input_dir']
@@ -525,7 +523,6 @@ if __name__ == '__main__':
 	mapResults = args['map']
 	bigThreshold = args['big_thresh']
 	bigData = False
-	## @}
 
 	# If the times check out, convert to datetime objects
 	stimeDetail = len(startTime.split('-'))
@@ -588,8 +585,7 @@ if __name__ == '__main__':
 	# Project onto equidistant coord system
 	print '\nProjecting storm cells onto equidistant coordinate system...'
 
-	## @name Projection variables
-	## @{
+	#Projection variables
 	meanLat = np.mean([MIN_LAT, MAX_LAT])
 	meanLon = np.mean([MIN_LON, MAX_LON])
 	xyDistMax = 0
@@ -599,7 +595,6 @@ if __name__ == '__main__':
 	# Setup equidistant map projection
 	m = Basemap(llcrnrlon=MIN_LON, llcrnrlat=MIN_LAT, urcrnrlon=MAX_LON, urcrnrlat=MAX_LAT,
 		        projection='aeqd', lat_0=meanLat, lon_0=meanLon)
-	## @}
 
 	for cell in stormCells:
 		stormCells[cell]['x'] = m(stormCells[cell]['lon'], stormCells[cell]['lat'])[0]
@@ -1283,7 +1278,7 @@ if __name__ == '__main__':
 		# Don't do it again if not bigData
 		if not bigData: break
 
-		# Recreate cell values
+		# Recreate cell values for next iteration
 		for cell in activeCells:
 			stormCells[cell]['x'] = m(stormCells[cell]['lon'], stormCells[cell]['lat'])[0]
 			stormCells[cell]['y'] = m(stormCells[cell]['lon'], stormCells[cell]['lat'])[1]

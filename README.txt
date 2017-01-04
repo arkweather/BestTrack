@@ -41,7 +41,7 @@ installed and available for use by your distribution.
 
 -----------------------------------------------------------------------------------
 
-USAGE:
+TERMINAL USAGE:
 
 usage: best_track.py [-h] [-i] [-s] [-t] [-bd] [-bt] [-jt] [-jd] [-mc] [-mi]
                      [-bi] [-bg] [-o] [-ts] [-m]
@@ -82,7 +82,7 @@ usage: best_track.py [-h] [-i] [-s] [-t] [-bd] [-bt] [-jt] [-jd] [-mc] [-mi]
                                    single main iteration.  More iterations may increase the
                                    likelihood of convergence, but will also increase runtime.
 
-       -bg    --big_thresh         The number of storm cells used as a threshold to determine
+       	-bg   --big_thresh         The number of storm cells used as a threshold to determine
                                    whether to run the code in "big data mode" (see below)
 
         -o    --out_dir            Specify where the output files will be saved.
