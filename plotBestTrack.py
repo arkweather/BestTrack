@@ -1,3 +1,10 @@
+"""
+Script to easily read in and plot the results of BestTrack output
+
+Example Usage:  python plotBestTrack.py 20150408_20150409 -i tracks
+
+"""
+
 import argparse
 import datetime
 from datetime import timedelta
@@ -21,8 +28,17 @@ AFTER_WIDTH = 2
 MIN_MIN_CELLS = 2        # Min min number storm cells per track.
 MAX_MIN_CELLS = 12       # Max min number storm cells per track.
 
-## Retrieve the user-speficified command line arguments
+
 def getOptions():
+	"""
+	Retrieve the user-speficified command line arguments
+	
+	Returns
+	--------
+	Namespace
+		Namespace of parsed arguments returned by ArgumentParser.parse_args()
+			
+	"""
 	
 	# Define legal command arguments
 	parser = argparse.ArgumentParser()
@@ -34,10 +50,20 @@ def getOptions():
 	args = parser.parse_args()
 	return args
 	
-## Check the user-specified command line arguments for errors not handled by argparse.
-## Errors will print to console before terminating the script.
-## @param args A dictionary of user-specified arguments
+
 def checkArgs(args):
+	"""
+	Check the user-specified command line arguments for errors not handled by argparse.
+	
+	Errors will print to console before terminating the script.
+	
+	Parameters
+	----------
+	args: Namespace
+		Namespace of user-specified arguments returned from getOptions()
+				
+	"""
+	
 	inSuffix = args['dir_suffix']
 	minCells = args['min_cells']
 	
@@ -58,6 +84,7 @@ def checkArgs(args):
 #                                                                                                                    #
 #====================================================================================================================#	
 if __name__ == '__main__':
+	"""Handle user input, read in files, then plot the tracks"""
 	
 	args = vars(getOptions())
 	checkArgs(args)
