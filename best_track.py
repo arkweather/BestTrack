@@ -60,6 +60,11 @@ MAX_MISSING = 10
 DASHES = '\n' + '-' * 80 + '\n\n'
 STARS = '\n' + '*' * 80 + '\n\n'
 
+#==================================================================================================================#
+#                                                                                                                  #
+#  User arguments                                                                                                  #
+#                                                                                                                  #
+#==================================================================================================================#
 
 def getOptions():
 	"""
@@ -320,6 +325,11 @@ def checkArgs(args):
 #		
 #	else: print 'Mapping disabled'
 
+#==================================================================================================================#
+#                                                                                                                  #
+#  Cluster identification                                                                                          #
+#                                                                                                                  #
+#==================================================================================================================#
 
 def find_clusters(stormCells, activeCells):
 	"""
@@ -347,7 +357,11 @@ def find_clusters(stormCells, activeCells):
 
 	return stormTracks
 
-
+#==================================================================================================================#
+#                                                                                                                  #
+#  Theil-sen calculations                                                                                          #
+#                                                                                                                  #
+#==================================================================================================================#
 
 def theil_sen_single(track):
 	"""
@@ -467,7 +481,11 @@ def theil_sen_batch(stormTracks):
 
 	return stormTracks
 
-
+#==================================================================================================================#
+#                                                                                                                  #
+#  Multiprocessing                                                                                                 #
+#                                                                                                                  #
+#==================================================================================================================#
 
 def init(l, c):
 	"""
@@ -475,113 +493,417 @@ def init(l, c):
 	
 	Paramters
 	l : multiprocessing.Lock()
-		A multiprocessing.Lock() object to be shared across processes
+		A lock object to be shared across processes
 	c : multiprocessing.Value()
-		A multiprocessing.Value('i') object to be shared across processes
+		A integer value object to be shared across processes
 		
 	"""
 	global lock
 	global counter
 	lock = l
 	counter = c
-
-
-#====================================================================================================================#
-#                                                                                                                    #
-#  Main Method - Handle user input, read in files, then run calculations                                             #
-#                                                                                                                    #
-#====================================================================================================================#
-
-if __name__ == '__main__':
-	args = vars(getOptions())
-	# print args
-
-	# Set Hostname
-	hostname = socket.gethostname().split('.')[0]
-	print '\n\nSetting hostname to ' + hostname
-	print 'Current working directory: ' + os.getcwd()
-	print 'Number of processing cores: ' + str(multiprocessing.cpu_count()) + '\n'
-
-	# Check user input.  Type casting is handled by argparse.
-	checkArgs(args)
-
-	# If the args check out, save their values here
-	startTime = args['start_time']
-	endTime = args['end_time']
-	inDir = args['input_dir']
-	inSuffix = args['dir_suffix']
-	fType = args['type'].lower()
-	bufferDist = args['buffer_dist']
-	bufferTime = timedelta(minutes=int(args['buffer_time']))
-	joinTime = timedelta(minutes=int(args['join_time']))
-	joinDist = args['join_dist']
-	minCells = args['min_cells']
-	mainIters = args['main_iters']
-	breakIters = args['breakup_iters']
-	outDir = args['out_dir']
-	outType = args['time_step']
-	mapResults = args['map']
-	bigThreshold = args['big_thresh']
-	bigData = False
-
-	# If the times check out, convert to datetime objects
-	stimeDetail = len(startTime.split('-'))
-	if stimeDetail == 1:
-		startTime = datetime.datetime.strptime(startTime, '%Y')
-	elif stimeDetail == 2:
-		startTime = datetime.datetime.strptime(startTime, '%Y-%m')
-	elif stimeDetail == 3:
-		startTime = datetime.datetime.strptime(startTime, '%Y-%m-%d')
-	elif stimeDetail == 4:
-		startTime = datetime.datetime.strptime(startTime, '%Y-%m-%d-%H%M%S')
-
-	etimeDetail = len(endTime.split('-'))
-	if etimeDetail == 1:
-		endTime = datetime.datetime.strptime(endTime, '%Y')
-	elif etimeDetail == 2:
-		endTime = datetime.datetime.strptime(endTime, '%Y-%m')
-	elif etimeDetail == 3:
-		endTime = datetime.datetime.strptime(endTime, '%Y-%m-%d')
-	elif etimeDetail == 4:
-		endTime = datetime.datetime.strptime(endTime, '%Y-%m-%d-%H%M%S')
-
-	print '\nRunning for times ' + str(startTime) + ' through ' + str(endTime)
-
-	print STARS
 	
-	# TODO:  Everything below here should be in a function (I think)
+#==================================================================================================================#
+#                                                                                                                  #
+#  Maps!                                                                                                           #
+#                                                                                                                  #
+#==================================================================================================================#
+			
+def generateMap(scOrigin, activeCells, stormTracks):
+	"""
+	Plots a map showing the new tracks compared to the original dataset
+	
+	Parameters
+	----------
+	scOrigin : Dictionary
+		The original stormCells dictionary (before the calculations)
+	activeCells : List
+		List containing the cells currently being processed.
+		If not in BigData mode, this will be the same as stormCells.keys()
+	stormTracks : Dictionary
+		Dictionary containing the modified stormTracks (after the calculations)
+	
+	"""
+		
 
-    #==================================================================================================================#
-    #                                                                                                                  #
-    #  Read in the files and process data                                                                              #
-    #                                                                                                                  #
-    #==================================================================================================================#
+	print 'Preparing to plot maps...'
 
-	# Check for root directory:
-	print 'Reading files:'
-	if not os.path.isdir(inDir):
-		print '\nERROR: Unable to find source directory "' + inDir + '". \nIf using a relative path, please check your working directory.\n'
-		sys.exit(2)
+	# Get original storm tracks
+	stOrigin = find_clusters(scOrigin, activeCells)
+	stOrigin = theil_sen_batch(stOrigin)
 
-	data = readCells.read(fType, inDir, inSuffix, startTime, endTime)
-	stormCells = data[0]
-	totNumCells = data[1]
-	numTrackTimes = data[2]
-	dates = sorted(data[3])
+	# Handle empty specifications
+	lats = [MIN_LAT, MAX_LAT]
+	lons = [MIN_LON, MAX_LON]
 
-	print '\nNumber of files: ' + str(numTrackTimes)
-	print 'Total number of storm cells: ' + str(totNumCells)
+	# Generate each map
+	print 'Plotting figure...'
 
-	if numTrackTimes == 0:
-		print 'No valid files found for this time period.  Please check the source directory and specified dates.\n'
-		sys.exit(0)
+	fig = plt.figure(1)
 
-	# Activate bigData mode above a certain threshold (50000 cells)
-	if totNumCells >= bigThreshold:
-		bigData = True
-		print 'Files will be processed in big data mode...'
-		if not outType: print 'An output file will be created for each day in the data...'
+	theseLats = lats
+	theseLons = lons
 
+	meanLat = np.mean(theseLats)
+	meanLon = np.mean(theseLons)
+
+	m = Basemap(llcrnrlon=-119, llcrnrlat=22, urcrnrlon=-64,
+				urcrnrlat=49, projection='lcc', lat_1=33, lat_2=45,
+				lon_0=-95, resolution='i', area_thresh=10000)
+
+	# Read in shapefiles
+	m.readshapefile('counties/c_11au16', name='counties', drawbounds=True, color='#C9CFD1')
+	m.readshapefile('States_Shapefiles/s_11au16', name='states', drawbounds=True)
+	m.readshapefile('province/province', name='canada', drawbounds=True)
+
+	# Sort cells in each original track by time and then get lat lon pairs for each cell
+	for track in stOrigin:
+		times = []
+		originCellsX = []
+		originCellsY = []
+
+		for cell in stOrigin[track]['cells']:
+			if bigData and cell['time'].date() != date: continue
+			times.append(cell['time'])
+		times = sorted(times)
+		for cellTime in times:
+			for cell in stOrigin[track]['cells']:
+				if cell['time'] == cellTime:
+					originCellsX.append(m(cell['lon'], cell['lat'])[0])
+					originCellsY.append(m(cell['lon'], cell['lat'])[1])
+					break
+
+		if len(originCellsX) < 2:
+			m.scatter(originCellsX, originCellsY, color='grey', marker='o')
+		else:
+			m.plot(originCellsX, originCellsY, color='grey', linewidth=BEFORE_WIDTH)
+
+	# Sort cells in each track by time and then get lat lon pairs for each cell
+	for track in stormTracks:
+		times = []
+		finalCellsX = []
+		finalCellsY = []
+		for cell in stormTracks[track]['cells']:
+			if bigData and cell['time'].date() != date: continue
+			times.append(cell['time'])
+
+		times = sorted(times)
+		for cellTime in times:
+			for cell in stormTracks[track]['cells']:
+				if cell['time'] == cellTime:
+					finalCellsX.append(m(cell['lon'], cell['lat'])[0])
+					finalCellsY.append(m(cell['lon'], cell['lat'])[1])
+					break
+
+	m.plot(finalCellsX, finalCellsY, color='r', linewidth=AFTER_WIDTH)
+
+	plt.show()
+	
+	# Save map to file
+    # print 'Saving figure ' + mapDir + '/' + str(startTime.date()) + '_' + str(endTime.date()) + '_' + str((i/2) + 1) + '.png' + '...'
+    # plt.savefig(mapDir + '/' + str(startTime.date()) + '_' + str(endTime.date()) + '_' + str((i/2) + 1) + '.png')
+   
+#==================================================================================================================#
+#                                                                                                                  #
+#  Output                                                                                                          #
+#                                                                                                                  #
+#==================================================================================================================# 
+    
+def generateOutput(activeCells, stormCells, stormTracks, distanceRatio, outDir, bigData = False, outType=False) :
+	"""
+	Generates output files with the results of the BestTrack calculations.
+	
+	This function produces at least 3 json-encoded files with information about
+	stormCells, stormTracks, and meta data.  If outType is True, this will produce
+	a stormCells file for every timestep (can be very large!).  See the README for 
+	more information.
+	
+	Parameters
+	----------
+	activeCells : List
+		List containing the cells currently being processed.
+		If not in BigData mode, this will be the same as stormCells.keys()
+	stormCells : Dictionary
+		Full dictionary of all stormCells in the dataset
+	stormTracks : Dictionary
+		Dictionary containing the modified stormTracks (after the calculations)
+	distanceRatio : float
+		The ratio between x-y distances and lat-lon distances
+	outDir : String
+		Filepath where the files will be saved (can be specified in args)
+	bigData : Bool
+		Default False
+		Will run in BigData mode if set to True.  See README for more info.
+	outType : Bool
+		Default False
+		Will produce a file for every timestep if set to True.  See README
+		for more info.
+		
+	""" 
+	
+	# Reset basemap for conversions
+	print 'Preparing output...'
+	# Setup equidistant map projection
+	m = Basemap(llcrnrlon=MIN_LON, llcrnrlat=MIN_LAT, urcrnrlon=MAX_LON, urcrnrlat=MAX_LAT,
+				projection='aeqd', lat_0=meanLat, lon_0=meanLon)
+
+	# Remove NaN track cells
+	print 'Removing unassigned cells...'
+	removeCells = []
+	for cell in activeCells:
+		if stormCells[cell]['track'] == 'NaN': removeCells.append(cell)
+	for cell in removeCells: activeCells.pop(activeCells.index(cell))
+
+	print 'Finding new start time, age, and speed for each cell...'
+
+	# Get a smaller dict with the active cell info for efficiency
+	# It's easier to use direct access here than to iterate later
+	activeStormCells = {}
+	for cell in activeCells:
+		activeStormCells[cell] = stormCells[cell]
+
+	removeTracks = []
+	for track in stormTracks:
+		# Remove tracks that aren't part of this day
+		if bigData:
+			if stormTracks[track]['t0'].date() != date and stormTracks[track]['tend'].date() != date:
+				removeTracks.append(track)
+				if stormTracks.keys().index(track) % REPORT_EVERY == 0: print '......' + str(stormTracks.keys().index(track)) + ' of ' + str(len(stormTracks)) + ' tracks processed......'
+				continue
+
+		# Get start time and age
+		# Convert all datetimes to str for JSON
+		times = []
+		cells = []
+
+		for cell in stormTracks[track]['cells']:
+			cell['start_time'] = stormTracks[track]['t0']
+			cell['age'] = total_seconds(cell['time'] - cell['start_time'])
+			times.append(cell['time'])
+
+		# Sort cells by time
+		times = sorted(np.unique(times))
+		for cellTime in times:
+			for cell in stormTracks[track]['cells']:
+				if cell['time'] == cellTime:
+					cells.append(cell)
+					break
+
+		# Calculate speed and component velocities for each cell
+		for cell in cells:
+			index = cells.index(cell)
+			if index == 0:
+				cell['motion_east'] = stormTracks[track]['u'] * distanceRatio * 1000  # m/s
+				cell['motion_south'] = -1 * stormTracks[track]['v'] * distanceRatio * 1000  # m/s
+
+			else:
+				prevX = cells[index - 1]['x']
+				prevY = cells[index - 1]['y']
+				prevTime = cells[index - 1]['time']
+
+				cell['motion_east'] = (cell['x'] - prevX) / (total_seconds(cell['time'] - prevTime)) * distanceRatio * 1000  # m/s
+				cell['motion_south'] = -1 * (cell['y'] - prevY) / (total_seconds(cell['time'] - prevTime)) * distanceRatio * 1000  # m/s
+
+			cell['speed'] = np.sqrt(cell['motion_east'] ** 2 + cell['motion_south'] ** 2)
+
+		# Cleanup for output
+		ids = []
+		for cell in stormTracks[track]['cells']:
+			# Convert times to strings for JSON
+			cell['time'] = str(cell['time'])
+			cell['start_time'] = str(cell['start_time'])
+
+			# Remove data specific to this run
+			cell.pop('x', None)
+			cell.pop('y', None)
+
+			ids.append(activeStormCells.keys()[activeStormCells.values().index(cell)])
+
+		# Only save cell IDs to storm track to save space
+		stormTracks[track]['cells'] = ids
+
+		stormTracks[track]['t0'] = str(stormTracks[track]['t0'])
+		stormTracks[track]['tend'] = str(stormTracks[track]['tend'])
+
+		# Convert x, y back to lon, lat and km/s to m/s
+		stormTracks[track]['lon0'], stormTracks[track]['lat0'] = m(stormTracks[track]['x0'], stormTracks[track]['y0'], inverse=True)
+		stormTracks[track]['lonf'], stormTracks[track]['latf'] = m(stormTracks[track]['xf'], stormTracks[track]['yf'], inverse=True)
+		stormTracks[track]['u'] = stormTracks[track]['u'] * distanceRatio * 1000  # m/s
+		stormTracks[track]['v'] = stormTracks[track]['v'] * distanceRatio * 1000  # m/s
+
+		# Remove data specific to this run
+		stormTracks[track].pop('x0', None)
+		stormTracks[track].pop('y0', None)
+		stormTracks[track].pop('xf', None)
+		stormTracks[track].pop('yf', None)
+
+		if stormTracks.keys().index(track) % REPORT_EVERY == 0: print '......' + str(stormTracks.keys().index(track)) + ' of ' + str(totNumTracks) + ' tracks processed......'
+
+	# Remove tracks not part of this date
+	if bigData:
+		print '\nRemoving ' + str(len(removeTracks)) + ' invalid clusters...'
+		for track in removeTracks: 
+			stormTracks.pop(track, None)
+		print 'New number of clusters: ' + str(len(stormTracks))
+
+	if outType:
+		# Print data for each time step
+
+		# Sort cells by time
+		times = []
+		for cell in activeCells:
+			times.append(datetime.datetime.strptime(activeStormCells[cell]['time'], '%Y-%m-%d %H:%M:%S'))
+
+		times = sorted(np.unique(times))
+
+		for cellTime in times:
+			cells = {}
+			for cell in activeCells:
+				if datetime.datetime.strptime(activeStormCells[cell]['time'], '%Y-%m-%d %H:%M:%S') == cellTime:
+					cells[cell] = activeStormCells[cell]
+
+			# Print stormCell data for this time step
+			filename = (str(cellTime.year) + str(cellTime.month).zfill(2) + str(cellTime.day).zfill(2) + '_' +
+		    			str(cellTime.hour).zfill(2) + str(cellTime.minute).zfill(2) + str(cellTime.second).zfill(
+						2) + '_cells.data')
+			print 'Printing ' + filename
+			with open(outDir + '/' + filename, 'w') as outfile:
+				json.dump(cells, outfile, sort_keys=True, indent=0)
+
+			outfile.close()
+
+	else:
+		# Print stormCells to data file
+		if bigData:
+			filename = str(date.year) + str(date.month).zfill(2) + str(date.day).zfill(2) + '_cells.data'
+			cells = {}
+			for track in stormTracks:
+				for cell in stormTracks[track]['cells']:
+					cells[cell] = activeStormCells[cell]
+			print '\nPrinting ' + filename
+			with open(outDir + '/' + filename, 'w') as outfile:
+				json.dump(cells, outfile, sort_keys=True, indent=0)
+
+		else:
+			filename = (str(startTime.year) + str(startTime.month).zfill(2) + str(startTime.day).zfill(2) + '_' +
+						str(endTime.year) + str(endTime.month).zfill(2) + str(endTime.day).zfill(2) + '_cells.data')
+			print 'Printing ' + filename
+			with open(outDir + '/' + filename, 'w') as outfile:
+				json.dump(activeStormCells, outfile, sort_keys=True, indent=0)
+
+		outfile.close()
+
+		# Print stormTracks to data file
+		if bigData:
+			filename = str(date.year) + str(date.month).zfill(2) + str(date.day).zfill(2) + '_tracks.data'
+			print 'Printing ' + filename
+			with open(outDir + '/' + filename, 'w') as outfile:
+				json.dump(stormTracks, outfile, sort_keys=True, indent=0)
+		else:
+			filename = (str(startTime.year) + str(startTime.month).zfill(2) + str(startTime.day).zfill(2) + '_' +
+						str(endTime.year) + str(endTime.month).zfill(2) + str(endTime.day).zfill(2) + '_tracks.data')
+			print 'Printing ' + filename
+			with open(outDir + '/' + filename, 'w') as outfile:
+				json.dump(stormTracks, outfile, sort_keys=True, indent=0)
+
+		outfile.close()
+
+	# Print metadata
+	if bigData:
+		filename = str(date.year) + str(date.month).zfill(2) + str(date.day).zfill(2) + '.meta'
+	else:
+		filename = (str(startTime.year) + str(startTime.month).zfill(2) + str(startTime.day).zfill(2) + '_' +
+					str(endTime.year) + str(endTime.month).zfill(2) + str(endTime.day).zfill(2) + '.meta')
+	print 'Printing ' + filename + '\n\n'
+	f = open(outDir + '/' + filename, 'w')
+	f.write('Run Start: ' + str(runstart) + '\n')
+	f.write('Start Time: ' + str(startTime) + '\n')
+	f.write('End Time: ' + str(endTime) + '\n')
+	f.write('File Type: ' + fType + '\n')
+	f.write('Buffer Distance: ' + str(bufferDist) + '\n')
+	f.write('Buffer Time: ' + str(bufferTime) + '\n')
+	f.write('Join Distance: ' + str(joinDist) + '\n')
+	f.write('Join Time: ' + str(joinTime) + '\n')
+	f.write('Min Cells per Track: ' + str(minCells) + '\n')
+	f.write('Main Iterations: ' + str(mainIters) + '\n')
+	f.write('Breakup Iterations: ' + str(breakIters) + '\n')
+	f.write('Number of Cells: ' + str(len(activeCells)) + '\n')
+	f.write('Completed: ' + str(datetime.datetime.now()))
+	f.close()
+
+	# Recreate cell values for next iteration
+	if bigData:
+		for cell in activeCells:
+			stormCells[cell]['x'] = m(stormCells[cell]['lon'], stormCells[cell]['lat'])[0]
+			stormCells[cell]['y'] = m(stormCells[cell]['lon'], stormCells[cell]['lat'])[1]
+			stormCells[cell]['time'] = datetime.datetime.strptime(str(stormCells[cell]['time']), '%Y-%m-%d %H:%M:%S')
+
+#==================================================================================================================#
+#                                                                                                                  #
+#  Calculations!                                                                                                   #
+#                                                                                                                  #
+#==================================================================================================================#
+
+def calculateBestTrack(stormCells, mainIters = 5, breakIters = 3, bufferDist = 10, bufferTime = 11, joinTime = 16, 
+					   joinDist = 50, minCells = 3, dates = [0], mapResults = False, bigData = False, output = False,
+					   outDir, outType = False):
+	"""
+	Takes a dictionary of storm cells and merges them into a series of optimal tracks
+	
+	The data undergoes 3 processes per iteration.  First cells are broken up into first-guess
+	track groupings.  These tracks are then joined with each other as necessary, and finally
+	any temporal ties between individual cells are resolved.  The process is repeated as many
+	times as specified by the user.  See the README for more info.
+	
+	Parameters
+	----------
+	stormCells : Dictionary
+		Full dictionary of all stormCells in the dataset
+	mainIters : int
+		Default 5
+		The number of times the whole process is run on the data
+	breakIters : int
+		Default 3
+		The number of times the breakup process is run per main iteration
+	bufferDist : int
+		Default 10 (km) 
+		The distance threshold to use when associated cells with a track
+	bufferTime : int
+		Default 11 (minutes)
+		The time threshold to use when associated cells with a track
+	joinTime : int
+		Default 16 (minutes)
+		The time threshold to use when joining two tracks
+	joinDist : int
+		Default 50 (km)
+		The distance threshold to use when joining two tracks
+	minCells : int
+		Default 3
+		The minimum number of cells required to be in a single track
+	dates : List
+		List containing all dates (datetime objects) to be processed.
+		If not bigData, this can be left at the default value of [0]
+	mapResults : Bool
+		Set True to plot the results of the BestTrack calculations.
+		Requires user interaction!
+	bigData : Bool
+		Set True if handling very large datasets.  Recommended if more than
+		50,000 cells are being processed at once.  See README for more info.
+	output : Bool
+		Set True to generate output files as specified in the README
+	outDir : String
+		Filepath where the files will be saved (can be specified in args)
+	outType : Bool
+		Will produce a file for every timestep if set to True.  See README
+		for more info.
+		
+	Returns
+	-------
+	List
+		List containing the modified stormCells and stormTracks dictionaries
+	
+	"""
+	
 	# Project onto equidistant coord system
 	print '\nProjecting storm cells onto equidistant coordinate system...'
 
@@ -623,11 +945,7 @@ if __name__ == '__main__':
 	print 'Ratio between x-y distances and lat-lon distances: ' + str(distanceRatio)
 	print DASHES
 
-    #==================================================================================================================#
-    #                                                                                                                  #
-    #  Calculations!                                                                                                   #
-    #                                                                                                                  #
-    #==================================================================================================================#
+    # Begin Calculations!
 
 	print 'Beginning Calculations...'
 	REPORT_EVERY = 1000
@@ -993,295 +1311,120 @@ if __name__ == '__main__':
 
 		print DASHES
 
-		#==================================================================================================================#
-		#                                                                                                                  #
-		#  Maps!                                                                                                           #
-		#                                                                                                                  #
-		#==================================================================================================================#
-
 		if mapResults:
-			print 'Preparing to plot maps...'
-
-			# Get original storm tracks
-			stOrigin = find_clusters(scOrigin, activeCells)
-			stOrigin = theil_sen_batch(stOrigin)
-
-			# Handle empty specifications
-			lats = [MIN_LAT, MAX_LAT]
-			lons = [MIN_LON, MAX_LON]
-
-			# Generate each map
-			print 'Plotting figure...'
-
-			fig = plt.figure(1)
-
-			theseLats = lats
-			theseLons = lons
-
-			meanLat = np.mean(theseLats)
-			meanLon = np.mean(theseLons)
-
-			m = Basemap(llcrnrlon=-119, llcrnrlat=22, urcrnrlon=-64,
-						urcrnrlat=49, projection='lcc', lat_1=33, lat_2=45,
-						lon_0=-95, resolution='i', area_thresh=10000)
-
-			# Read in shapefiles
-			m.readshapefile('counties/c_11au16', name='counties', drawbounds=True, color='#C9CFD1')
-			m.readshapefile('States_Shapefiles/s_11au16', name='states', drawbounds=True)
-			m.readshapefile('province/province', name='canada', drawbounds=True)
-
-			# Sort cells in each original track by time and then get lat lon pairs for each cell
-			for track in stOrigin:
-				times = []
-				originCellsX = []
-				originCellsY = []
-
-				for cell in stOrigin[track]['cells']:
-					if bigData and cell['time'].date() != date: continue
-					times.append(cell['time'])
-				times = sorted(times)
-				for cellTime in times:
-					for cell in stOrigin[track]['cells']:
-						if cell['time'] == cellTime:
-							originCellsX.append(m(cell['lon'], cell['lat'])[0])
-							originCellsY.append(m(cell['lon'], cell['lat'])[1])
-							break
-
-				if len(originCellsX) < 2:
-					m.scatter(originCellsX, originCellsY, color='grey', marker='o')
-				else:
-					m.plot(originCellsX, originCellsY, color='grey', linewidth=BEFORE_WIDTH)
-
-			# Sort cells in each track by time and then get lat lon pairs for each cell
-			for track in stormTracks:
-				times = []
-				finalCellsX = []
-				finalCellsY = []
-				for cell in stormTracks[track]['cells']:
-					if bigData and cell['time'].date() != date: continue
-					times.append(cell['time'])
-
-				times = sorted(times)
-				for cellTime in times:
-					for cell in stormTracks[track]['cells']:
-						if cell['time'] == cellTime:
-							finalCellsX.append(m(cell['lon'], cell['lat'])[0])
-							finalCellsY.append(m(cell['lon'], cell['lat'])[1])
-							break
-
-			m.plot(finalCellsX, finalCellsY, color='r', linewidth=AFTER_WIDTH)
-
-			plt.show()
-
-            # Save map to file
-            # print 'Saving figure ' + mapDir + '/' + str(startTime.date()) + '_' + str(endTime.date()) + '_' + str((i/2) + 1) + '.png' + '...'
-            # plt.savefig(mapDir + '/' + str(startTime.date()) + '_' + str(endTime.date()) + '_' + str((i/2) + 1) + '.png')
-
+			generateMap(scOrigin, activeCells, stormTracks)
 			print DASHES
+			
+		# Save output
+		if output:
+			generateOutput(activeCells, stormCells, stormTracks, outDir, bigData, outType)
 
-		#==================================================================================================================#
-		#                                                                                                                  #
-		#  Output                                                                                                          #
-		#                                                                                                                  #
-		#==================================================================================================================#
-
-		# Reset basemap for conversions
-		print 'Preparing output...'
-		# Setup equidistant map projection
-		m = Basemap(llcrnrlon=MIN_LON, llcrnrlat=MIN_LAT, urcrnrlon=MAX_LON, urcrnrlat=MAX_LAT,
-    				projection='aeqd', lat_0=meanLat, lon_0=meanLon)
-
-		# Remove NaN track cells
-		print 'Removing unassigned cells...'
-		removeCells = []
-		for cell in activeCells:
-			if stormCells[cell]['track'] == 'NaN': removeCells.append(cell)
-		for cell in removeCells: activeCells.pop(activeCells.index(cell))
-
-		print 'Finding new start time, age, and speed for each cell...'
-
-		# Get a smaller dict with the active cell info for efficiency
-		# It's easier to use direct access here than to iterate later
-		activeStormCells = {}
-		for cell in activeCells:
-			activeStormCells[cell] = stormCells[cell]
-
-		removeTracks = []
-		for track in stormTracks:
-			# Remove tracks that aren't part of this day
-			if bigData:
-				if stormTracks[track]['t0'].date() != date and stormTracks[track]['tend'].date() != date:
-					removeTracks.append(track)
-					if stormTracks.keys().index(track) % REPORT_EVERY == 0: print '......' + str(stormTracks.keys().index(track)) + ' of ' + str(len(stormTracks)) + ' tracks processed......'
-					continue
-
-			# Get start time and age
-			# Convert all datetimes to str for JSON
-			times = []
-			cells = []
-
-			for cell in stormTracks[track]['cells']:
-				cell['start_time'] = stormTracks[track]['t0']
-				cell['age'] = total_seconds(cell['time'] - cell['start_time'])
-				times.append(cell['time'])
-
-			# Sort cells by time
-			times = sorted(np.unique(times))
-			for cellTime in times:
-				for cell in stormTracks[track]['cells']:
-					if cell['time'] == cellTime:
-						cells.append(cell)
-						break
-
-			# Calculate speed and component velocities for each cell
-			for cell in cells:
-				index = cells.index(cell)
-				if index == 0:
-					cell['motion_east'] = stormTracks[track]['u'] * distanceRatio * 1000  # m/s
-					cell['motion_south'] = -1 * stormTracks[track]['v'] * distanceRatio * 1000  # m/s
-
-				else:
-					prevX = cells[index - 1]['x']
-					prevY = cells[index - 1]['y']
-					prevTime = cells[index - 1]['time']
-
-					cell['motion_east'] = (cell['x'] - prevX) / (total_seconds(cell['time'] - prevTime)) * distanceRatio * 1000  # m/s
-					cell['motion_south'] = -1 * (cell['y'] - prevY) / (total_seconds(cell['time'] - prevTime)) * distanceRatio * 1000  # m/s
-
-				cell['speed'] = np.sqrt(cell['motion_east'] ** 2 + cell['motion_south'] ** 2)
-
-			# Cleanup for output
-			ids = []
-			for cell in stormTracks[track]['cells']:
-				# Convert times to strings for JSON
-				cell['time'] = str(cell['time'])
-				cell['start_time'] = str(cell['start_time'])
-
-				# Remove data specific to this run
-				cell.pop('x', None)
-				cell.pop('y', None)
-
-				ids.append(activeStormCells.keys()[activeStormCells.values().index(cell)])
-
-			# Only save cell IDs to storm track to save space
-			stormTracks[track]['cells'] = ids
-
-			stormTracks[track]['t0'] = str(stormTracks[track]['t0'])
-			stormTracks[track]['tend'] = str(stormTracks[track]['tend'])
-
-			# Convert x, y back to lon, lat and km/s to m/s
-			stormTracks[track]['lon0'], stormTracks[track]['lat0'] = m(stormTracks[track]['x0'], stormTracks[track]['y0'], inverse=True)
-			stormTracks[track]['lonf'], stormTracks[track]['latf'] = m(stormTracks[track]['xf'], stormTracks[track]['yf'], inverse=True)
-			stormTracks[track]['u'] = stormTracks[track]['u'] * distanceRatio * 1000  # m/s
-			stormTracks[track]['v'] = stormTracks[track]['v'] * distanceRatio * 1000  # m/s
-
-			# Remove data specific to this run
-			stormTracks[track].pop('x0', None)
-			stormTracks[track].pop('y0', None)
-			stormTracks[track].pop('xf', None)
-			stormTracks[track].pop('yf', None)
-
-			if stormTracks.keys().index(track) % REPORT_EVERY == 0: print '......' + str(stormTracks.keys().index(track)) + ' of ' + str(totNumTracks) + ' tracks processed......'
-
-		# Remove tracks not part of this date
-		if bigData:
-			print '\nRemoving ' + str(len(removeTracks)) + ' invalid clusters...'
-			for track in removeTracks: 
-				stormTracks.pop(track, None)
-			print 'New number of clusters: ' + str(len(stormTracks))
-
-		if outType:
-			# Print data for each time step
-
-			# Sort cells by time
-			times = []
-			for cell in activeCells:
-				times.append(datetime.datetime.strptime(activeStormCells[cell]['time'], '%Y-%m-%d %H:%M:%S'))
-
-			times = sorted(np.unique(times))
-
-			for cellTime in times:
-				cells = {}
-				for cell in activeCells:
-					if datetime.datetime.strptime(activeStormCells[cell]['time'], '%Y-%m-%d %H:%M:%S') == cellTime:
-						cells[cell] = activeStormCells[cell]
-
-				# Print stormCell data for this time step
-				filename = (str(cellTime.year) + str(cellTime.month).zfill(2) + str(cellTime.day).zfill(2) + '_' +
-	            			str(cellTime.hour).zfill(2) + str(cellTime.minute).zfill(2) + str(cellTime.second).zfill(
-		    				2) + '_cells.data')
-				print 'Printing ' + filename
-				with open(outDir + '/' + filename, 'w') as outfile:
-					json.dump(cells, outfile, sort_keys=True, indent=0)
-
-				outfile.close()
-
-		else:
-			# Print stormCells to data file
-			if bigData:
-				filename = str(date.year) + str(date.month).zfill(2) + str(date.day).zfill(2) + '_cells.data'
-				cells = {}
-				for track in stormTracks:
-					for cell in stormTracks[track]['cells']:
-						cells[cell] = activeStormCells[cell]
-				print '\nPrinting ' + filename
-				with open(outDir + '/' + filename, 'w') as outfile:
-					json.dump(cells, outfile, sort_keys=True, indent=0)
-
-			else:
-				filename = (str(startTime.year) + str(startTime.month).zfill(2) + str(startTime.day).zfill(2) + '_' +
-							str(endTime.year) + str(endTime.month).zfill(2) + str(endTime.day).zfill(2) + '_cells.data')
-				print 'Printing ' + filename
-				with open(outDir + '/' + filename, 'w') as outfile:
-					json.dump(activeStormCells, outfile, sort_keys=True, indent=0)
-
-			outfile.close()
-
-			# Print stormTracks to data file
-			if bigData:
-				filename = str(date.year) + str(date.month).zfill(2) + str(date.day).zfill(2) + '_tracks.data'
-				print 'Printing ' + filename
-				with open(outDir + '/' + filename, 'w') as outfile:
-					json.dump(stormTracks, outfile, sort_keys=True, indent=0)
-			else:
-				filename = (str(startTime.year) + str(startTime.month).zfill(2) + str(startTime.day).zfill(2) + '_' +
-			    			str(endTime.year) + str(endTime.month).zfill(2) + str(endTime.day).zfill(2) + '_tracks.data')
-				print 'Printing ' + filename
-				with open(outDir + '/' + filename, 'w') as outfile:
-					json.dump(stormTracks, outfile, sort_keys=True, indent=0)
-
-			outfile.close()
-
-		# Print metadata
-		if bigData:
-			filename = str(date.year) + str(date.month).zfill(2) + str(date.day).zfill(2) + '.meta'
-		else:
-			filename = (str(startTime.year) + str(startTime.month).zfill(2) + str(startTime.day).zfill(2) + '_' +
-        				str(endTime.year) + str(endTime.month).zfill(2) + str(endTime.day).zfill(2) + '.meta')
-		print 'Printing ' + filename + '\n\n'
-		f = open(outDir + '/' + filename, 'w')
-		f.write('Run Start: ' + str(runstart) + '\n')
-		f.write('Start Time: ' + str(startTime) + '\n')
-		f.write('End Time: ' + str(endTime) + '\n')
-		f.write('File Type: ' + fType + '\n')
-		f.write('Buffer Distance: ' + str(bufferDist) + '\n')
-		f.write('Buffer Time: ' + str(bufferTime) + '\n')
-		f.write('Join Distance: ' + str(joinDist) + '\n')
-		f.write('Join Time: ' + str(joinTime) + '\n')
-		f.write('Min Cells per Track: ' + str(minCells) + '\n')
-		f.write('Main Iterations: ' + str(mainIters) + '\n')
-		f.write('Breakup Iterations: ' + str(breakIters) + '\n')
-		f.write('Number of Cells: ' + str(len(activeCells)) + '\n')
-		f.write('Completed: ' + str(datetime.datetime.now()))
-		f.close()
-
-		# Don't do it again if not bigData
+   		# Don't do it again if not bigData
 		if not bigData: break
+		
+	return [stormCells, stormTracks]
 
-		# Recreate cell values for next iteration
-		for cell in activeCells:
-			stormCells[cell]['x'] = m(stormCells[cell]['lon'], stormCells[cell]['lat'])[0]
-			stormCells[cell]['y'] = m(stormCells[cell]['lon'], stormCells[cell]['lat'])[1]
-			stormCells[cell]['time'] = datetime.datetime.strptime(str(stormCells[cell]['time']), '%Y-%m-%d %H:%M:%S')
 
+#====================================================================================================================#
+#                                                                                                                    #
+#  Main Method															                                             #
+#                                                                                                                    #
+#====================================================================================================================#
+
+def main():
+	"""Main Method - Handle user input, read in files, then run calculations"""
+	
+	args = vars(getOptions())
+	# print args
+
+	# Set Hostname
+	hostname = socket.gethostname().split('.')[0]
+	print '\n\nSetting hostname to ' + hostname
+	print 'Current working directory: ' + os.getcwd()
+	print 'Number of processing cores: ' + str(multiprocessing.cpu_count()) + '\n'
+
+	# Check user input.  Type casting is handled by argparse.
+	checkArgs(args)
+
+	# If the args check out, save their values here
+	startTime = args['start_time']
+	endTime = args['end_time']
+	inDir = args['input_dir']
+	inSuffix = args['dir_suffix']
+	fType = args['type'].lower()
+	bufferDist = args['buffer_dist']
+	bufferTime = timedelta(minutes=int(args['buffer_time']))
+	joinTime = timedelta(minutes=int(args['join_time']))
+	joinDist = args['join_dist']
+	minCells = args['min_cells']
+	mainIters = args['main_iters']
+	breakIters = args['breakup_iters']
+	outDir = args['out_dir']
+	outType = args['time_step']
+	mapResults = args['map']
+	bigThreshold = args['big_thresh']
+	bigData = False
+
+	# If the times check out, convert to datetime objects
+	stimeDetail = len(startTime.split('-'))
+	if stimeDetail == 1:
+		startTime = datetime.datetime.strptime(startTime, '%Y')
+	elif stimeDetail == 2:
+		startTime = datetime.datetime.strptime(startTime, '%Y-%m')
+	elif stimeDetail == 3:
+		startTime = datetime.datetime.strptime(startTime, '%Y-%m-%d')
+	elif stimeDetail == 4:
+		startTime = datetime.datetime.strptime(startTime, '%Y-%m-%d-%H%M%S')
+
+	etimeDetail = len(endTime.split('-'))
+	if etimeDetail == 1:
+		endTime = datetime.datetime.strptime(endTime, '%Y')
+	elif etimeDetail == 2:
+		endTime = datetime.datetime.strptime(endTime, '%Y-%m')
+	elif etimeDetail == 3:
+		endTime = datetime.datetime.strptime(endTime, '%Y-%m-%d')
+	elif etimeDetail == 4:
+		endTime = datetime.datetime.strptime(endTime, '%Y-%m-%d-%H%M%S')
+
+	print '\nRunning for times ' + str(startTime) + ' through ' + str(endTime)
+
+	print STARS
+
+    
+    # Read in the files and process data
+	# Check for root directory:
+	print 'Reading files:'
+	if not os.path.isdir(inDir):
+		print '\nERROR: Unable to find source directory "' + inDir + '". \nIf using a relative path, please check your working directory.\n'
+		sys.exit(2)
+
+	data = readCells.read(fType, inDir, inSuffix, startTime, endTime)
+	stormCells = data[0]
+	totNumCells = data[1]
+	numTrackTimes = data[2]
+	dates = sorted(data[3])
+
+	print '\nNumber of files: ' + str(numTrackTimes)
+	print 'Total number of storm cells: ' + str(totNumCells)
+
+	if numTrackTimes == 0:
+		print 'No valid files found for this time period.  Please check the source directory and specified dates.\n'
+		sys.exit(0)
+
+	# Activate bigData mode above a certain threshold (50000 cells)
+	if totNumCells >= bigThreshold:
+		bigData = True
+		print 'Files will be processed in big data mode...'
+		if not outType: print 'An output file will be created for each day in the data...'
+	
+	# Run it!	
+	calculateBestTrack(stormCells, mainIters, breakIters, bufferDist, bufferTime, jointime,
+					   joinDist, minCells, dates, mapResults, bigData, output = True,
+					   outDir, outType)
+	
 	print '\n\nBest Track has completed succesfully!\n\n\n\n'
+
+
+# Run Main
+if __name__ == '__main__':
+	main()
