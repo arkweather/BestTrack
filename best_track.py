@@ -60,6 +60,8 @@ MAX_MISSING = 10
 DASHES = '\n' + '-' * 80 + '\n\n'
 STARS = '\n' + '*' * 80 + '\n\n'
 
+total_seconds = datetime.timedelta.total_seconds
+
 #==================================================================================================================#
 #                                                                                                                  #
 #  User arguments                                                                                                  #
@@ -840,13 +842,186 @@ def generateOutput(activeCells, stormCells, stormTracks, distanceRatio, outDir, 
 
 #==================================================================================================================#
 #                                                                                                                  #
+#  Breakup Cells                                                                                                   #
+#                                                                                                                  #
+#==================================================================================================================#
+
+# Separated into function for multiprocessing.
+# Note that global variables are not shared between
+# process, so each process returns the modified subset
+# of stormCells to be rejoined later
+
+def breakupCells(cellSubset, stormTracks, bufferTime, bufferDist, distanceRatio, totCells):
+	"""
+	Multiprocessing function used to breakup a subset of cells
+	
+	All cells in the subset are compared to each track and 
+	added to the most appropriate one based on distance and time
+	
+	Parameters
+	----------
+	cellSubset : Dictionary
+		Dictionary of storCells subset to be processed by this worker
+	stormTracks : Dictionary
+		Full stormTracks dictionary containing information about the current 
+		tracks and the cells contained within them
+	bufferTime : int
+		The time threshold to use when associated cells with a track
+	bufferDist : int
+		The distance threshold to use when associated cells with a track
+	distanceRatio : float
+		The ratio between x-y distances and lat-lon distances
+	totCells : int
+		The total number of active cells being processed across all workers
+		
+	Returns
+	-------
+	List
+		List containing the number of changed cells and the modified cell subset
+	"""
+	
+	REPORT_EVERY = 1000
+	changedCells = 0
+
+	for cell in cellSubset:
+		cellTime = cellSubset[cell]['time']
+		cellX = cellSubset[cell]['x']
+		cellY = cellSubset[cell]['y']
+
+		# Calculate distances
+		minDist = 1e9
+		minTrack = stormTracks[min(stormTracks)]
+		for track in stormTracks:
+			# Only compare to tracks in temporal range
+			if not (stormTracks[track]['t0'] - bufferTime <= cellTime <= stormTracks[track]['tend'] + bufferTime):
+				continue
+
+			# Preference individual cells to join other tracks
+			if len(stormTracks[track]['cells']) < 2 and track == cellSubset[cell]['track']:
+				continue
+
+			if stormTracks[track]['u'] == 'NaN':
+				xPoint = stormTracks[track]['x0']
+				yPoint = stormTracks[track]['y0']
+			else:
+				xPoint = stormTracks[track]['x0'] + (stormTracks[track]['u'] * (total_seconds(cellTime - stormTracks[track]['t0'])))
+				yPoint = stormTracks[track]['y0'] + (stormTracks[track]['v'] * (total_seconds(cellTime - stormTracks[track]['t0'])))
+
+			dist = np.sqrt((cellX - xPoint) ** 2 + (cellY - yPoint) ** 2)
+			dist = dist * distanceRatio  # Convert from x,y to km
+
+			# Force cells to be assigned to a track (not NaN)
+			# If need be they'll be weeded out in the tie break step later
+			if dist < minDist and track != 'NaN':
+				minDist = dist
+				minTrack = track
+
+		if minDist <= bufferDist:
+			if minTrack != cellSubset[cell]['track']: changedCells += 1
+			cellSubset[cell]['track'] = minTrack
+		else:
+			cellSubset[cell]['track'] = 'NaN'
+
+		lock.acquire()
+		if counter.value % REPORT_EVERY == 0:
+			print '......' + str(counter.value) + ' of ' + str(totCells) + ' assigned......'
+		counter.value += 1
+		lock.release()
+
+	return [changedCells, cellSubset]
+	
+#==================================================================================================================#
+#                                                                                                                  #
+#  Tie Break	                                                                                                   #
+#                                                                                                                  #
+#==================================================================================================================#
+	
+def tieBreak(trackSubset, stormTracks, stormCells, totNumTracks, distanceRatio):
+	"""
+	Mulitprocess function to resolve multiple cells assigned to same cluster at same time step
+	
+	Parameters
+	----------
+	trackSubset : Dictionary
+		Subset of stormTracks dictionary to be processed by this worker
+	stormTracks : Dictionary
+		Full dictionary of all stormTracks in the dataset
+	stormCells : Dictionary
+		Full dictionary of all stormCells in the dataset
+	totNumTracks : int
+		Number of tracks being processed by all workers
+	distanceRatio : float
+		The ratio between x-y distances and lat-lon distances
+		
+	Returns
+	-------
+	List
+		List containing the number of tie-breaks and the modified storm cells
+	
+	"""
+				
+	breaks = 0
+	modifiedCells = {}
+	REPORT_EVERY = 1000
+	
+	for track in trackSubset:
+		if len(stormTracks[track]['cells']) < 2:
+			lock.acquire()
+			if counter.value % REPORT_EVERY == 0: print '......' + str(counter.value) + ' of ' + str(totNumTracks) + ' tracks processed for ties......'
+			counter.value += 1
+			lock.release()
+			continue
+
+		# Map all cells to their times
+		times = {}
+		for cell in stormTracks[track]['cells']:
+			if cell['time'] in times:
+				times[cell['time']].append(cell)
+			else:
+				times[cell['time']] = [cell]
+
+		# Get duplicate times
+		for thisTime in times:
+			
+			if len(times[thisTime]) > 1:
+				cells = times[thisTime]
+
+				# Compare each cell and keep the one closest to the track
+				dist = []
+				for cell in cells:
+					cellX = cell['x']
+					cellY = cell['y']
+					xPredict = stormTracks[track]['x0'] + (stormTracks[track]['u'] * (total_seconds(thisTime - stormTracks[track]['t0'])))
+					yPredict = stormTracks[track]['y0'] + (stormTracks[track]['v'] * (total_seconds(thisTime - stormTracks[track]['t0'])))
+
+					dist.append(np.sqrt((xPredict - cellX) ** 2 + (yPredict - cellY) ** 2) * distanceRatio)
+
+				minCell = cells[dist.index(min(dist))]
+				for cell in cells:
+					if cell != minCell:
+						stormTracks[track]['cells'].remove(cell)
+						cell['track'] = 'NaN'
+						modifiedCells[stormCells.keys()[stormCells.values().index(cell)]] = cell
+					
+				breaks += 1
+
+		lock.acquire()
+		if counter.value % REPORT_EVERY == 0:
+			print '......' + str(counter.value) + ' of ' + str(totNumTracks) + ' tracks processed for ties......'
+		counter.value += 1
+		lock.release()
+	
+	return [breaks, modifiedCells]
+
+#==================================================================================================================#
+#                                                                                                                  #
 #  Calculations!                                                                                                   #
 #                                                                                                                  #
 #==================================================================================================================#
 
 def calculateBestTrack(stormCells, mainIters = 5, breakIters = 3, bufferDist = 10, bufferTime = 11, joinTime = 16, 
 					   joinDist = 50, minCells = 3, dates = [0], mapResults = False, bigData = False, output = False,
-					   outDir, outType = False):
+					   outDir = '', outType = False):
 	"""
 	Takes a dictionary of storm cells and merges them into a series of optimal tracks
 	
@@ -951,7 +1126,6 @@ def calculateBestTrack(stormCells, mainIters = 5, breakIters = 3, bufferDist = 1
 	REPORT_EVERY = 1000
 	if mapResults: scOrigin = copy.deepcopy(stormCells)
 	oldCells = []
-	total_seconds = datetime.timedelta.total_seconds
 
 	# Run the whole thing for each date
 	# Note this will only run once if not bigData (break at end)
@@ -990,62 +1164,6 @@ def calculateBestTrack(stormCells, mainIters = 5, breakIters = 3, bufferDist = 1
 				print 'Assigning each cell to nearest cluster...'
 
 
-				# Separated into function for multiprocessing.
-				# Note that global variables are not shared between
-				# process, so each process returns the modified subset
-				# of stormCells to be rejoined later
-				def breakupCells(cellSubset):
-					
-					changedCells = 0
-
-					for cell in cellSubset:
-						cellTime = cellSubset[cell]['time']
-						cellX = cellSubset[cell]['x']
-						cellY = cellSubset[cell]['y']
-
-						# Calculate distances
-						minDist = 1e9
-						minTrack = stormTracks[min(stormTracks)]
-						for track in stormTracks:
-							# Only compare to tracks in temporal range
-							if not (stormTracks[track]['t0'] - bufferTime <= cellTime <= stormTracks[track]['tend'] + bufferTime):
-								continue
-
-							# Preference individual cells to join other tracks
-							if len(stormTracks[track]['cells']) < 2 and track == cellSubset[cell]['track']:
-								continue
-
-							if stormTracks[track]['u'] == 'NaN':
-								xPoint = stormTracks[track]['x0']
-								yPoint = stormTracks[track]['y0']
-							else:
-								xPoint = stormTracks[track]['x0'] + (stormTracks[track]['u'] * (total_seconds(cellTime - stormTracks[track]['t0'])))
-								yPoint = stormTracks[track]['y0'] + (stormTracks[track]['v'] * (total_seconds(cellTime - stormTracks[track]['t0'])))
-
-							dist = np.sqrt((cellX - xPoint) ** 2 + (cellY - yPoint) ** 2)
-							dist = dist * distanceRatio  # Convert from x,y to km
-
-							# Force cells to be assigned to a track (not NaN)
-							# If need be they'll be weeded out in the tie break step later
-							if dist < minDist and track != 'NaN':
-								minDist = dist
-								minTrack = track
-
-						if minDist <= bufferDist:
-							if minTrack != cellSubset[cell]['track']: changedCells += 1
-							cellSubset[cell]['track'] = minTrack
-						else:
-							cellSubset[cell]['track'] = 'NaN'
-
-						lock.acquire()
-						if counter.value % REPORT_EVERY == 0:
-							print '......' + str(counter.value) + ' of ' + str(len(activeCells)) + ' assigned......'
-						counter.value += 1
-						lock.release()
-
-					return [changedCells, cellSubset]
-
-
 				# Determine the number of cells per process
 				subsets = []
 				numPerProc = int(np.ceil(float(len(activeCells)) / multiprocessing.cpu_count()))
@@ -1061,7 +1179,8 @@ def calculateBestTrack(stormCells, mainIters = 5, breakIters = 3, bufferDist = 1
 				l = Lock()
 				counter = Value('i', 0)
 				with closing(Pool(initializer=init, initargs=(l, counter), processes=20, maxtasksperchild = 1)) as pool:
-					results = [pool.apply_async(breakupCells, (subsets[l],)) for l in range(len(subsets))]
+					results = [pool.apply_async(breakupCells, (subsets[l], stormTracks, bufferTime, bufferDist, 
+												distanceRatio, len(activeCells),)) for l in range(len(subsets))]
 					changedCells = sum([result.get()[0] for result in results])
 					for result in results:
 						for key in result.get()[1]:
@@ -1196,60 +1315,6 @@ def calculateBestTrack(stormCells, mainIters = 5, breakIters = 3, bufferDist = 1
 			# Break ties (multiple cells assigned to same cluster at same time step)
 			print '\nBreaking ties...'
 			
-			def tieBreak(trackSubset):
-				
-				breaks = 0
-				modifiedCells = {}
-				
-				for track in trackSubset:
-					if len(stormTracks[track]['cells']) < 2:
-						lock.acquire()
-						if counter.value % REPORT_EVERY == 0: print '......' + str(counter.value) + ' of ' + str(totNumTracks) + ' tracks processed for ties......'
-						counter.value += 1
-						lock.release()
-						continue
-
-					# Map all cells to their times
-					times = {}
-					for cell in stormTracks[track]['cells']:
-						if cell['time'] in times:
-							times[cell['time']].append(cell)
-						else:
-							times[cell['time']] = [cell]
-
-					# Get duplicate times
-					for thisTime in times:
-						
-						if len(times[thisTime]) > 1:
-							cells = times[thisTime]
-
-							# Compare each cell and keep the one closest to the track
-							dist = []
-							for cell in cells:
-								cellX = cell['x']
-								cellY = cell['y']
-								xPredict = stormTracks[track]['x0'] + (stormTracks[track]['u'] * (total_seconds(thisTime - stormTracks[track]['t0'])))
-								yPredict = stormTracks[track]['y0'] + (stormTracks[track]['v'] * (total_seconds(thisTime - stormTracks[track]['t0'])))
-
-								dist.append(np.sqrt((xPredict - cellX) ** 2 + (yPredict - cellY) ** 2) * distanceRatio)
-
-							minCell = cells[dist.index(min(dist))]
-							for cell in cells:
-								if cell != minCell:
-									stormTracks[track]['cells'].remove(cell)
-									cell['track'] = 'NaN'
-									modifiedCells[stormCells.keys()[stormCells.values().index(cell)]] = cell
-								
-							breaks += 1
-
-					lock.acquire()
-					if counter.value % REPORT_EVERY == 0:
-						print '......' + str(counter.value) + ' of ' + str(totNumTracks) + ' tracks processed for ties......'
-					counter.value += 1
-					lock.release()
-				
-				return [breaks, modifiedCells]
-			
 			# Determine the number of cells per process
 			subsets = []
 			numPerProc = int(np.ceil(float(len(stormTracks.keys())) / multiprocessing.cpu_count()))
@@ -1264,7 +1329,8 @@ def calculateBestTrack(stormCells, mainIters = 5, breakIters = 3, bufferDist = 1
 			l = Lock()
 			counter = Value('i', 0)
 			with closing(Pool(initializer=init, initargs=(l, counter), processes=20, maxtasksperchild = 1)) as pool:
-				results = [pool.apply_async(tieBreak, (subsets[l],)) for l in range(len(subsets))]
+				results = [pool.apply_async(tieBreak, (subsets[l], stormTracks, stormCells, 
+											totNumTracks, distanceRatio,)) for l in range(len(subsets))]
 				breaks = sum([result.get()[0] for result in results])
 				for result in results:
 					for key in result.get()[1]:
@@ -1364,6 +1430,7 @@ def main():
 	mapResults = args['map']
 	bigThreshold = args['big_thresh']
 	bigData = False
+	output = True
 
 	# If the times check out, convert to datetime objects
 	stimeDetail = len(startTime.split('-'))
@@ -1418,8 +1485,8 @@ def main():
 		if not outType: print 'An output file will be created for each day in the data...'
 	
 	# Run it!	
-	calculateBestTrack(stormCells, mainIters, breakIters, bufferDist, bufferTime, jointime,
-					   joinDist, minCells, dates, mapResults, bigData, output = True,
+	calculateBestTrack(stormCells, mainIters, breakIters, bufferDist, bufferTime, joinTime,
+					   joinDist, minCells, dates, mapResults, bigData, output,
 					   outDir, outType)
 	
 	print '\n\nBest Track has completed succesfully!\n\n\n\n'
