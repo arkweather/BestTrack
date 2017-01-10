@@ -60,7 +60,10 @@ MAX_MISSING = 10
 DASHES = '\n' + '-' * 80 + '\n\n'
 STARS = '\n' + '*' * 80 + '\n\n'
 
+# Global variables
 total_seconds = datetime.timedelta.total_seconds
+runstart = None
+fType = ''
 
 #==================================================================================================================#
 #                                                                                                                  #
@@ -511,7 +514,7 @@ def init(l, c):
 #                                                                                                                  #
 #==================================================================================================================#
 			
-def generateMap(scOrigin, activeCells, stormTracks):
+def generateMap(scOrigin, activeCells, stormTracks, bigData, date):
 	"""
 	Plots a map showing the new tracks compared to the original dataset
 	
@@ -524,6 +527,10 @@ def generateMap(scOrigin, activeCells, stormTracks):
 		If not in BigData mode, this will be the same as stormCells.keys()
 	stormTracks : Dictionary
 		Dictionary containing the modified stormTracks (after the calculations)
+	bigData : Bool
+		Will run in BigData mode if set to True.  See README for more info.
+	date : datetime
+		The date currently being processed.  Only required if bigData == True
 	
 	"""
 		
@@ -597,8 +604,9 @@ def generateMap(scOrigin, activeCells, stormTracks):
 					finalCellsY.append(m(cell['lon'], cell['lat'])[1])
 					break
 
-	m.plot(finalCellsX, finalCellsY, color='r', linewidth=AFTER_WIDTH)
-
+		m.plot(finalCellsX, finalCellsY, color='r', linewidth=AFTER_WIDTH)
+	
+	print "Displaying plot.  Please close the figure to continue"	
 	plt.show()
 	
 	# Save map to file
@@ -611,11 +619,13 @@ def generateMap(scOrigin, activeCells, stormTracks):
 #                                                                                                                  #
 #==================================================================================================================# 
     
-def generateOutput(activeCells, stormCells, stormTracks, distanceRatio, outDir, bigData = False, outType=False) :
+def generateOutput(activeCells, stormCells, stormTracks, distanceRatio, outDir, startTime, endTime, date, 
+					bigData = False, outType=False, mainIters = '', breakIters = '', bufferDist = '', 
+					bufferTime = '', joinTime = '', joinDist = '', minCells = '') :
 	"""
 	Generates output files with the results of the BestTrack calculations.
 	
-	This function produces at least 3 json-encoded files with information about
+	This function produces at least 2 json-encoded files with information about
 	stormCells, stormTracks, and meta data.  If outType is True, this will produce
 	a stormCells file for every timestep (can be very large!).  See the README for 
 	more information.
@@ -633,15 +643,59 @@ def generateOutput(activeCells, stormCells, stormTracks, distanceRatio, outDir, 
 		The ratio between x-y distances and lat-lon distances
 	outDir : String
 		Filepath where the files will be saved (can be specified in args)
+	startTime : datetime
+		datetime object with the start of the processed time range
+		Only required if not in bigData mode
+	endTime : datetime
+		datetime object with the end of the processed time range
+		Only required if not in bigData mode
+	date : 
+		datetime object with the date currently being processed
+		Only required in bigData mode
 	bigData : Bool
 		Default False
 		Will run in BigData mode if set to True.  See README for more info.
 	outType : Bool
 		Default False
 		Will produce a file for every timestep if set to True.  See README
-		for more info.
+		for more info
+		
+	The following are meta parameters and are only required if you want them
+	included in the meta file output:
+	
+	mainIters : int
+		Default 5
+		The number of times the whole process is run on the data
+	breakIters : int
+		Default 3
+		The number of times the breakup process is run per main iteration
+	bufferDist : int
+		Default 10 (km) 
+		The distance threshold to use when associated cells with a track
+	bufferTime : int
+		Default 11 (minutes)
+		The time threshold to use when associated cells with a track
+	joinTime : int
+		Default 16 (minutes)
+		The time threshold to use when joining two tracks
+	joinDist : int
+		Default 50 (km)
+		The distance threshold to use when joining two tracks
+	minCells : int
+		Default 3
+		The minimum number of cells required to be in a single track
+		
 		
 	""" 
+	
+	REPORT_EVERY = 1000
+	totNumTracks = len(stormTracks)
+	
+	lats = [MIN_LAT, MAX_LAT]
+	lons = [MIN_LON, MAX_LON]
+
+	meanLat = np.mean(lats)
+	meanLon = np.mean(lons)
 	
 	# Reset basemap for conversions
 	print 'Preparing output...'
@@ -706,6 +760,8 @@ def generateOutput(activeCells, stormCells, stormTracks, distanceRatio, outDir, 
 				cell['motion_east'] = (cell['x'] - prevX) / (total_seconds(cell['time'] - prevTime)) * distanceRatio * 1000  # m/s
 				cell['motion_south'] = -1 * (cell['y'] - prevY) / (total_seconds(cell['time'] - prevTime)) * distanceRatio * 1000  # m/s
 
+			#print cell['motion_east']
+			#print cell['motion_south']
 			cell['speed'] = np.sqrt(cell['motion_east'] ** 2 + cell['motion_south'] ** 2)
 
 		# Cleanup for output
@@ -830,6 +886,7 @@ def generateOutput(activeCells, stormCells, stormTracks, distanceRatio, outDir, 
 	f.write('Main Iterations: ' + str(mainIters) + '\n')
 	f.write('Breakup Iterations: ' + str(breakIters) + '\n')
 	f.write('Number of Cells: ' + str(len(activeCells)) + '\n')
+	f.write('Number of Tracks: ' + str(totNumTracks) + '\n')
 	f.write('Completed: ' + str(datetime.datetime.now()))
 	f.close()
 
@@ -1020,8 +1077,8 @@ def tieBreak(trackSubset, stormTracks, stormCells, totNumTracks, distanceRatio):
 #==================================================================================================================#
 
 def calculateBestTrack(stormCells, mainIters = 5, breakIters = 3, bufferDist = 10, bufferTime = 11, joinTime = 16, 
-					   joinDist = 50, minCells = 3, dates = [0], mapResults = False, bigData = False, output = False,
-					   outDir = '', outType = False):
+					   joinDist = 50, minCells = 3, dates = [0], startTime = None, endTime = None, mapResults = False, 
+					   bigData = False, output = False, outDir = '', outType = False):
 	"""
 	Takes a dictionary of storm cells and merges them into a series of optimal tracks
 	
@@ -1058,6 +1115,12 @@ def calculateBestTrack(stormCells, mainIters = 5, breakIters = 3, bufferDist = 1
 	dates : List
 		List containing all dates (datetime objects) to be processed.
 		If not bigData, this can be left at the default value of [0]
+	startTime : datetime
+		datetime object with the start of the processed time range
+		Only required if not in bigData mode
+	endTime : datetime
+		datetime object with the end of the processed time range
+		Only required if not in bigData mode
 	mapResults : Bool
 		Set True to plot the results of the BestTrack calculations.
 		Requires user interaction!
@@ -1378,12 +1441,14 @@ def calculateBestTrack(stormCells, mainIters = 5, breakIters = 3, bufferDist = 1
 		print DASHES
 
 		if mapResults:
-			generateMap(scOrigin, activeCells, stormTracks)
+			generateMap(scOrigin, activeCells, stormTracks, bigData, date)
 			print DASHES
 			
 		# Save output
 		if output:
-			generateOutput(activeCells, stormCells, stormTracks, outDir, bigData, outType)
+			generateOutput(activeCells, stormCells, stormTracks, distanceRatio, outDir, 
+							startTime, endTime, date, bigData, outType, mainIters, breakIters,
+							bufferDist, bufferTime, joinTime, joinDist, minCells)
 
    		# Don't do it again if not bigData
 		if not bigData: break
@@ -1486,8 +1551,8 @@ def main():
 	
 	# Run it!	
 	calculateBestTrack(stormCells, mainIters, breakIters, bufferDist, bufferTime, joinTime,
-					   joinDist, minCells, dates, mapResults, bigData, output,
-					   outDir, outType)
+					   joinDist, minCells, dates, startTime, endTime, mapResults, bigData, 
+					   output, outDir, outType)
 	
 	print '\n\nBest Track has completed succesfully!\n\n\n\n'
 
