@@ -57,6 +57,7 @@ TOLERANCE = 1e-9
 MAX_MISSING = 10
 DASHES = '\n' + '-' * 80 + '\n\n'
 STARS = '\n' + '*' * 80 + '\n\n'
+REPORT_EVERY = 1000
 
 total_seconds = datetime.timedelta.total_seconds
 
@@ -86,7 +87,7 @@ def callBreakup(obj, cellSubset, stormTracks, bufferTime, bufferDist, distanceRa
 	----------
 	obj : btengine
 		The current btengine object (self)
-	Everything else same as btenging.breakupCells()
+	Everything else same as btengine.breakupCells()
 	
 	"""
 	
@@ -99,7 +100,7 @@ def callTieBreak(obj, trackSubset, stormTracks, stormCells, totNumTracks, distan
 	----------
 	obj : btengine
 		The current btengine object (self)
-	Everything else same as btenging.tieBreak()
+	Everything else same as btengine.tieBreak()
 	
 	"""
 	
@@ -389,7 +390,6 @@ class btengine:
 			List containing the number of changed cells and the modified cell subset
 		"""
 	
-		REPORT_EVERY = 1000
 		changedCells = 0
 
 		for cell in cellSubset:
@@ -471,7 +471,6 @@ class btengine:
 				
 		breaks = 0
 		modifiedCells = {}
-		REPORT_EVERY = 1000
 	
 		for track in trackSubset:
 			if len(stormTracks[track]['cells']) < 2:
@@ -607,7 +606,6 @@ class btengine:
 		# Begin Calculations!
 
 		print 'Beginning Calculations...'
-		REPORT_EVERY = 1000
 		if mapResults: scOrigin = copy.deepcopy(stormCells)
 		oldCells = []
 
@@ -872,6 +870,8 @@ class btengine:
 
 	   		# Don't do it again if not bigData
 			if not bigData: break
+			
+			print DASHES
 		
 		return [stormCells, stormTracks]
 		
@@ -1028,8 +1028,7 @@ class btengine:
 			for more info		
 		
 		""" 
-	
-		REPORT_EVERY = 1000
+		
 		totNumTracks = len(stormTracks)
 	
 		lats = [MIN_LAT, MAX_LAT]
