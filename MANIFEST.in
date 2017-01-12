@@ -1,6 +1,0 @@
-# Include shapefiles for plotting
-recursive-include States_Shapefiles *
-recursive-include counties *
-recursive-include province *
-
-

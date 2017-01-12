@@ -27,7 +27,7 @@ additional features and greater flexibility."
 	#pkg_description = "test"					
 
 	setup(name="besttrack",
-          version="0.1.3",
+          version="0.1.4",
           description="Object-based geotemporal path optimization",
           author="David Harrison",
           author_email="david.r.harrison-1@ou.edu",
@@ -36,12 +36,6 @@ additional features and greater flexibility."
           url="https://github.com/arkweather/BestTrack",
           packages=["besttrack"],
           scripts=["bin/best_track", "bin/best_track.config"],
-          include_package_data = True,
-          package_data={
-          				'besttrack':'States_Shapefiles/*',
-          				'besttrack':'counties/*',
-          				'besttrack':'province/*'
-          				},
           keywords=["verification", "tracking", "weather", "meteorology"],
           classifiers=classifiers,
           install_requires=requires)

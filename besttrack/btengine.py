@@ -928,9 +928,10 @@ class btengine:
 					lon_0=-95, resolution='i', area_thresh=10000)
 
 		# Read in shapefiles
-		m.readshapefile('counties/c_11au16', name='counties', drawbounds=True, color='#C9CFD1')
-		m.readshapefile('States_Shapefiles/s_11au16', name='states', drawbounds=True)
-		m.readshapefile('province/province', name='canada', drawbounds=True)
+		# Source: http://www.nws.noaa.gov/geodata/
+		m.readshapefile('mapdata/counties/c_11au16', name='counties', drawbounds=True, color='#C9CFD1')
+		m.readshapefile('mapdata/states/s_11au16', name='states', drawbounds=True)
+		m.readshapefile('mapdata/provinces/province', name='canada', drawbounds=True)
 
 		# Sort cells in each original track by time and then get lat lon pairs for each cell
 		for track in stOrigin:
