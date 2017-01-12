@@ -27,7 +27,7 @@ additional features and greater flexibility."
 	#pkg_description = "test"					
 
 	setup(name="besttrack",
-          version="0.1.4",
+          version="0.1.5",
           description="Object-based geotemporal path optimization",
           author="David Harrison",
           author_email="david.r.harrison-1@ou.edu",
@@ -35,6 +35,7 @@ additional features and greater flexibility."
           license="MIT",
           url="https://github.com/arkweather/BestTrack",
           packages=["besttrack"],
+          include_package_data = True,
           scripts=["bin/best_track", "bin/best_track.config"],
           keywords=["verification", "tracking", "weather", "meteorology"],
           classifiers=classifiers,

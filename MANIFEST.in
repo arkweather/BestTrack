@@ -1,0 +1,20 @@
+# Add map files to the distribution
+# This may be overkill, but it works
+
+include besttrack/mapdata/counties/*
+include besttrack/mapdata/provinces/*
+include besttrack/mapdata/states/*
+
+# Probably doesn't need these lines...
+include besttrack/mapdata/counties/*.dbf
+include besttrack/mapdata/counties/*.prj
+include besttrack/mapdata/counties/*.shp
+include besttrack/mapdata/counties/*.shx
+include besttrack/mapdata/provinces/*.dbf
+include besttrack/mapdata/provinces/*.prj
+include besttrack/mapdata/provinces/*.shp
+include besttrack/mapdata/provinces/*.shx
+include besttrack/mapdata/states/*.dbf
+include besttrack/mapdata/states/*.prj
+include besttrack/mapdata/states/*.shp
+include besttrack/mapdata/states/*.shx
