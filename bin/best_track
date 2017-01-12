@@ -13,7 +13,8 @@
 
 """
 
-from btengine import btengine
+from besttrack import btengine
+from besttrack import readCells
 import argparse
 import socket
 import sys
@@ -24,7 +25,6 @@ import time
 import numpy as np
 from collections import defaultdict
 import multiprocessing
-import readCells
 import traceback
 
 # Best-track constants 
@@ -328,6 +328,7 @@ def checkArgs(args):
 def main():
 	"""Main Method - Handle user input, read in files, then run calculations"""
 	
+	os.chdir(os.path.dirname(sys.argv[0]))
 	args = vars(getOptions())
 	# print args
 

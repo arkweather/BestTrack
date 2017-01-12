@@ -23,7 +23,6 @@ from mpl_toolkits.basemap import Basemap
 import matplotlib.pyplot as plt
 import scipy.stats.mstats as stats
 from collections import defaultdict
-import readCells
 import traceback
 from multiprocessing import Pool, Manager, Value, Array, Lock
 import multiprocessing
@@ -63,7 +62,7 @@ total_seconds = datetime.timedelta.total_seconds
 
 
 # These functions must be outside the class definition for multiprocessing
-def init(l, c):
+def initmultiprocess(l, c):
 	"""
 	Instantiates global variables for multiprocessing
 	
@@ -660,7 +659,7 @@ class btengine:
 					# Split processing over avilable cores
 					l = Lock()
 					counter = Value('i', 0)
-					with closing(Pool(initializer=init, initargs=(l, counter), processes=20, maxtasksperchild = 1)) as pool:
+					with closing(Pool(initializer=initmultiprocess, initargs=(l, counter), processes=20, maxtasksperchild = 1)) as pool:
 						results = [pool.apply_async(callBreakup, (self, subsets[l], stormTracks, bufferTime, bufferDist, 
 													distanceRatio, len(activeCells),)) for l in range(len(subsets))]
 						changedCells = sum([result.get()[0] for result in results])
@@ -810,7 +809,7 @@ class btengine:
 				# Split processing over avilable cores
 				l = Lock()
 				counter = Value('i', 0)
-				with closing(Pool(initializer=init, initargs=(l, counter), processes=20, maxtasksperchild = 1)) as pool:
+				with closing(Pool(initializer=initmultiprocess, initargs=(l, counter), processes=20, maxtasksperchild = 1)) as pool:
 					results = [pool.apply_async(callTieBreak, (self, subsets[l], stormTracks, stormCells, 
 												totNumTracks, distanceRatio,)) for l in range(len(subsets))]
 					breaks = sum([result.get()[0] for result in results])

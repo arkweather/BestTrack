@@ -1,3 +1,6 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
 from setuptools import setup
 
 classifiers = ['Development Status :: 4 - Beta',
@@ -11,18 +14,20 @@ classifiers = ['Development Status :: 4 - Beta',
 requires = ['matplotlib~=1.5.1',
 			'numpy~=1.11.1',
 			'beautifulsoup4~=4.4.1',
-			'shapely~=1.15.16',
+			'shapely~=1.5.16',
 			'scipy~=0.18.0',
 			'basemap~=1.0.7']
 			
 if __name__ == '__main__':
 	
 	pkg_description = "Best Track is approximately equivalent to the Warning Decision Support System - \
-						Integrated Information’s (WDSS-II) w2besttrack algorithm with the potential for \
-						additional features and greater flexibility."
+Integrated Information (WDSS-II) w2besttrack algorithm with the potential for \
+additional features and greater flexibility."
+	
+	#pkg_description = "test"					
 
 	setup(name="besttrack",
-          version="0.1.0",
+          version="0.1.3",
           description="Object-based geotemporal path optimization",
           author="David Harrison",
           author_email="david.r.harrison-1@ou.edu",
@@ -30,7 +35,13 @@ if __name__ == '__main__':
           license="MIT",
           url="https://github.com/arkweather/BestTrack",
           packages=["besttrack"],
-          scripts=["bin/best_track"],
+          scripts=["bin/best_track", "bin/best_track.config"],
+          include_package_data = True,
+          package_data={
+          				'besttrack':'States_Shapefiles/*',
+          				'besttrack':'counties/*',
+          				'besttrack':'province/*'
+          				},
           keywords=["verification", "tracking", "weather", "meteorology"],
           classifiers=classifiers,
           install_requires=requires)
