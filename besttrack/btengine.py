@@ -28,6 +28,7 @@ from multiprocessing import Pool, Manager, Value, Array, Lock
 import multiprocessing
 import ctypes
 from contextlib import closing
+import inspect
 
 # Best-track constants 
 MAX_BUFFER_DIST = 20  	# Buffer distance [km].  0.1 deg in w2besttrack.
@@ -196,7 +197,7 @@ class btengine:
 		self.outType = outType
 		
 		self.runstart = None
-			
+		self.thisDir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 			
 	#==================================================================================================================#
 	#                                                                                                                  #
@@ -929,9 +930,9 @@ class btengine:
 
 		# Read in shapefiles
 		# Source: http://www.nws.noaa.gov/geodata/
-		m.readshapefile('mapdata/counties/c_11au16', name='counties', drawbounds=True, color='#C9CFD1')
-		m.readshapefile('mapdata/states/s_11au16', name='states', drawbounds=True)
-		m.readshapefile('mapdata/provinces/province', name='canada', drawbounds=True)
+		m.readshapefile(self.thisDir + '/mapdata/counties/c_11au16', name='counties', drawbounds=True, color='#C9CFD1')
+		m.readshapefile(self.thisDir + '/mapdata/states/s_11au16', name='states', drawbounds=True)
+		m.readshapefile(self.thisDir + '/mapdata/provinces/province', name='canada', drawbounds=True)
 
 		# Sort cells in each original track by time and then get lat lon pairs for each cell
 		for track in stOrigin:
