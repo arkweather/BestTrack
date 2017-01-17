@@ -26,6 +26,7 @@ import numpy as np
 from collections import defaultdict
 import multiprocessing
 import traceback
+import inspect
 
 # Best-track constants 
 MAX_BUFFER_DIST = 20  	# Buffer distance [km].  0.1 deg in w2besttrack.
@@ -71,7 +72,8 @@ def getOptions():
 
 	# Load default values from config file
 	try:
-		f = open('best_track.config')
+		filepath = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+		f = open(filepath + '/best_track.config')
 		lines = f.readlines()
 		f.close()
 
@@ -328,7 +330,6 @@ def checkArgs(args):
 def main():
 	"""Main Method - Handle user input, read in files, then run calculations"""
 	
-	os.chdir(os.path.dirname(sys.argv[0]))
 	args = vars(getOptions())
 	# print args
 

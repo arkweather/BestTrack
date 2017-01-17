@@ -27,7 +27,7 @@ additional features and greater flexibility."
 	#pkg_description = "test"					
 
 	setup(name="besttrack",
-          version="0.1.5",
+          version="0.1.6",
           description="Object-based geotemporal path optimization",
           author="David Harrison",
           author_email="david.r.harrison-1@ou.edu",
