@@ -36,7 +36,7 @@ additional features and greater flexibility."
           url="https://github.com/arkweather/BestTrack",
           packages=["besttrack"],
           include_package_data = True,
-          scripts=["bin/best_track", "bin/best_track.config"],
+          scripts=["bin/besttrack", "bin/besttrack.config"],
           keywords=["verification", "tracking", "weather", "meteorology"],
           classifiers=classifiers,
           install_requires=requires)

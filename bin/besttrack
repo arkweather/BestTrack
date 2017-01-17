@@ -73,7 +73,7 @@ def getOptions():
 	# Load default values from config file
 	try:
 		filepath = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-		f = open(filepath + '/best_track.config')
+		f = open(filepath + '/besttrack.config')
 		lines = f.readlines()
 		f.close()
 
@@ -93,11 +93,11 @@ def getOptions():
 		m = bool(int(lines[36].split('=')[1]))
 
 	except IOError:
-		print 'Unable to find best_track.config.  Please make sure the file is in the same directory as best_track.py\n\n'
+		print 'Unable to find besttrack.config.  Please make sure the file is in the same directory as best_track.py\n\n'
 		sys.exit(2)
 	
 	except IndexError:
-		print 'A value is missing in best_track.config or the file has become corrupted.  See the README file for more info.\n\n'
+		print 'A value is missing in besttrack.config or the file has become corrupted.  See the README file for more info.\n\n'
 		sys.exit(2)
 
 	# Define legal command arguments
