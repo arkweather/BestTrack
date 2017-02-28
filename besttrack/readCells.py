@@ -216,7 +216,7 @@ def readProbSevere(inDir, inSuffix, startTime, endTime):
 	stormCells = {} 
 	dates = []
 	
-	# Read in Segmotion files
+	# Read in ProbSevere files
 	for root, dirs, files in os.walk(inDir):
 		if inSuffix != '' and not (files and not dirs and os.path.split(root)[-1] == inSuffix): continue
 		for trackFile in files:

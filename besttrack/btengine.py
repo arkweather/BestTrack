@@ -116,7 +116,7 @@ def callTieBreak(obj, trackSubset, stormTracks, stormCells, totNumTracks, distan
 class btengine:
 	"""Class containing all initial parameters and algorithms of the best_track program"""
 	
-	def __init__(self, stormCells, mainIters = 5, breakIters = 3, bufferDist = 10, bufferTime = 11, joinTime = 16, 
+	def __init__(self, stormCells = None, mainIters = 5, breakIters = 3, bufferDist = 10, bufferTime = 11, joinTime = 16, 
 				   joinDist = 50, minCells = 3, dates = [0], startTime = None, endTime = None, mapResults = False, 
 				   bigData = False, output = False, fType = '', outDir = '', outType = False):
 		"""
