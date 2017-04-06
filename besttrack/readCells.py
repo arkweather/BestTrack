@@ -105,7 +105,7 @@ def readRyan(inDir, inSuffix, startTime, endTime):
 					cell = cell.split()
 					cellID = totNumCells
 					stormCells[cellID] = {'time':fileDate, 'lat':float(cell[0]), 'lon':float(cell[1]), 'latr':float(cell[3]), 
-											'lonr':float(cell[4]), 'orientation':float(cell[8]), 'track':str(cell[9]) + '_' + str(fileDate.date())} 
+											'lonr':float(cell[4]), 'orientation':float(cell[8]), 'track':str(cell[9]) + '_' + str(fileDate.date()), 'old_track': str(cell[9])} 
 					totNumCells += 1
 						
 	return [stormCells, totNumCells, numTrackTimes, dates]
@@ -180,7 +180,7 @@ def readSegmotion(inDir, inSuffix, startTime, endTime):
 					
 					cellID = totNumCells
 					stormCells[cellID] = {'time': time, 'latr': latr, 'lat': lat, 'lonr': lonr, 'lon': lon, 
-											'orientation': orientation, 'track': track + '_' + str(fileDate.date())}
+											'orientation': orientation, 'track': track + '_' + str(fileDate.date()), 'old_track': track}
 					totNumCells += 1
 														
 						
@@ -267,7 +267,7 @@ def readProbSevere(inDir, inSuffix, startTime, endTime):
 					
 					cellID = totNumCells
 					stormCells[cellID] = {'time': fileDate, 'latr': latr, 'lat': lat, 'lonr': lonr, 'lon': lon, 
-											'orientation': 'NaN', 'track': track + '_' + str(fileDate.date())}
+											'orientation': 'NaN', 'track': track + '_' + str(fileDate.date()), 'old_track': track}
 					totNumCells += 1
 						
 						

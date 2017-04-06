@@ -59,7 +59,12 @@ DASHES = '\n' + '-' * 80 + '\n\n'
 STARS = '\n' + '*' * 80 + '\n\n'
 REPORT_EVERY = 1000
 
-total_seconds = datetime.timedelta.total_seconds
+global stormTracksG
+global stormCellsG
+
+#total_seconds = datetime.timedelta.total_seconds
+def total_seconds(timedelta):
+	return((timedelta.microseconds + 0.0 + (timedelta.seconds + timedelta.days * 24 * 3600) * 10 ** 6) / 10 ** 6)
 
 
 # These functions must be outside the class definition for multiprocessing
@@ -80,7 +85,7 @@ def initmultiprocess(l, c):
 	lock = l
 	counter = c
 	
-def callBreakup(obj, cellSubset, stormTracks, bufferTime, bufferDist, distanceRatio, totCells):
+def callBreakup(obj, cellSubset, bufferTime, bufferDist, distanceRatio, totCells):
 	"""Calls breakupCells() for multiprocessing
 	
 	Parameters
@@ -91,9 +96,9 @@ def callBreakup(obj, cellSubset, stormTracks, bufferTime, bufferDist, distanceRa
 	
 	"""
 	
-	return obj.breakupCells(cellSubset, stormTracks, bufferTime, bufferDist, distanceRatio, totCells)
+	return obj.breakupCells(cellSubset, bufferTime, bufferDist, distanceRatio, totCells)
 	
-def callTieBreak(obj, trackSubset, stormTracks, stormCells, totNumTracks, distanceRatio):
+def callTieBreak(obj, trackSubset, totNumTracks, distanceRatio):
 	"""Calls tieBreak() for multiprocessing
 	
 	Parameters
@@ -104,7 +109,7 @@ def callTieBreak(obj, trackSubset, stormTracks, stormCells, totNumTracks, distan
 	
 	"""
 	
-	return obj.tieBreak(trackSubset, stormTracks, stormCells, totNumTracks, distanceRatio)
+	return obj.tieBreak(trackSubset, totNumTracks, distanceRatio)
 	
 	
 #==================================================================================================================#
@@ -220,7 +225,7 @@ class btengine:
 			Dictionary of storm tracks containing storm cells {ID: [cells]}
 	
 		"""
-
+		global stormTracks
 		stormTracks = {}
 		for cell in activeCells:
 			track = stormCells[cell]['track']
@@ -361,7 +366,7 @@ class btengine:
 	#                                                                                                                  #
 	#==================================================================================================================#
 
-	def breakupCells(self, cellSubset, stormTracks, bufferTime, bufferDist, distanceRatio, totCells):
+	def breakupCells(self, cellSubset, bufferTime, bufferDist, distanceRatio, totCells):
 		"""
 		Multiprocessing function used to breakup a subset of cells
 	
@@ -391,6 +396,7 @@ class btengine:
 		"""
 	
 		changedCells = 0
+		stormTracks = stormTracksG
 
 		for cell in cellSubset:
 			cellTime = cellSubset[cell]['time']
@@ -445,7 +451,7 @@ class btengine:
 	#                                                                                                                  #
 	#==================================================================================================================#
 	
-	def tieBreak(self, trackSubset, stormTracks, stormCells, totNumTracks, distanceRatio):
+	def tieBreak(self, trackSubset, totNumTracks, distanceRatio):
 		"""
 		Mulitprocess function to resolve multiple cells assigned to same cluster at same time step
 	
@@ -471,6 +477,9 @@ class btengine:
 				
 		breaks = 0
 		modifiedCells = {}
+		
+		stormTracks = stormTracksG
+		stormCells = stormCellsG
 	
 		for track in trackSubset:
 			if len(stormTracks[track]['cells']) < 2:
@@ -660,8 +669,11 @@ class btengine:
 					# Split processing over avilable cores
 					l = Lock()
 					counter = Value('i', 0)
+					global stormTracksG
+					stormTracksG = stormTracks
+					
 					with closing(Pool(initializer=initmultiprocess, initargs=(l, counter), processes=20, maxtasksperchild = 1)) as pool:
-						results = [pool.apply_async(callBreakup, (self, subsets[l], stormTracks, bufferTime, bufferDist, 
+						results = [pool.apply_async(callBreakup, (self, subsets[l], bufferTime, bufferDist, 
 													distanceRatio, len(activeCells),)) for l in range(len(subsets))]
 						changedCells = sum([result.get()[0] for result in results])
 						for result in results:
@@ -674,6 +686,8 @@ class btengine:
 						pool.close()
 						pool.join()
 						pool.terminate()
+
+					del stormTracksG
 
 					print 'All cells have been assigned!'
 					print 'Number of modified cells: ' + str(changedCells)
@@ -810,9 +824,14 @@ class btengine:
 				# Split processing over avilable cores
 				l = Lock()
 				counter = Value('i', 0)
+				
+				global stormTracksG
+				global stormCellsG
+				stormTracksG = stormTracks
+				stormCellsG = stormCells
+				
 				with closing(Pool(initializer=initmultiprocess, initargs=(l, counter), processes=20, maxtasksperchild = 1)) as pool:
-					results = [pool.apply_async(callTieBreak, (self, subsets[l], stormTracks, stormCells, 
-												totNumTracks, distanceRatio,)) for l in range(len(subsets))]
+					results = [pool.apply_async(callTieBreak, (self, subsets[l], totNumTracks, distanceRatio,)) for l in range(len(subsets))]
 					breaks = sum([result.get()[0] for result in results])
 					for result in results:
 						for key in result.get()[1]:
@@ -824,6 +843,9 @@ class btengine:
 					pool.close()
 					pool.join()
 					pool.terminate()
+					
+				del stormTracksG
+				del stormCellsG
 			
 				print 'All tracks have been processed for tie breaks'
 				print 'Number of tie breaks: ' + str(breaks)
@@ -851,7 +873,14 @@ class btengine:
 			print '\nPerforming final cluster identification...'
 			stormTracks = self.find_clusters(stormCells, activeCells)
 			stormTracks = self.theil_sen_batch(stormTracks)
-			stormTracks.pop('NaN', None)
+			
+			for cell in activeCells:
+				if stormCells[cell]['track'] == 'NaN': 
+					stormCells[cell]['track'] = str(stormCells[cell]['old_track']) + str(cell) + '_' + str(stormCells[cell]['time'].date())
+			
+			stormTracks = self.find_clusters(stormCells, activeCells)
+			stormTracks = self.theil_sen_batch(stormTracks)
+			stormTracks.pop('NaN', None)			
 
 			print 'Number of removed tracks: ' + str(numRemoved + 1)
 			print 'Original number of clusters: ' + str(lastNumTracks)
@@ -1045,12 +1074,12 @@ class btengine:
 					projection='aeqd', lat_0=meanLat, lon_0=meanLon)
 
 		# Remove NaN track cells
-		print 'Removing unassigned cells...'
-		removeCells = []
+		print 'Updating unassigned cells...'
 		for cell in activeCells:
-			if stormCells[cell]['track'] == 'NaN': removeCells.append(cell)
-		for cell in removeCells: activeCells.pop(activeCells.index(cell))
-
+			if stormCells[cell]['track'] == 'NaN': 
+				stormCells[cell]['track'] == str(stormCells[cell]['old_track']) + str(cell) + '_' + str(stormCells[cell]['time'].date())
+				print stormCells[cell]['track']
+				
 		print 'Finding new start time, age, and speed for each cell...'
 
 		# Get a smaller dict with the active cell info for efficiency
@@ -1107,6 +1136,8 @@ class btengine:
 
 			# Cleanup for output
 			ids = []
+			old_IDs = []
+			stormTracks[track]['cells'] = cells
 			for cell in stormTracks[track]['cells']:
 				# Convert times to strings for JSON
 				cell['time'] = str(cell['time'])
@@ -1117,9 +1148,11 @@ class btengine:
 				cell.pop('y', None)
 
 				ids.append(activeStormCells.keys()[activeStormCells.values().index(cell)])
+				old_IDs.append(cell['old_track'])
 
 			# Only save cell IDs to storm track to save space
 			stormTracks[track]['cells'] = ids
+			stormTracks[track]['old_IDs'] = old_IDs
 
 			stormTracks[track]['t0'] = str(stormTracks[track]['t0'])
 			stormTracks[track]['tend'] = str(stormTracks[track]['tend'])
@@ -1179,6 +1212,10 @@ class btengine:
 				for track in stormTracks:
 					for cell in stormTracks[track]['cells']:
 						cells[cell] = activeStormCells[cell]
+						# Do this again since the serializable error keeps popping up
+						cells[cell]['time'] = str(cells[cell]['time'])
+						cells[cell]['start_time'] = str(cells[cell]['start_time'])
+						
 				print '\nPrinting ' + filename
 				with open(outDir + '/' + filename, 'w') as outfile:
 					json.dump(cells, outfile, sort_keys=True, indent=0)
@@ -1186,9 +1223,16 @@ class btengine:
 			else:
 				filename = (str(startTime.year) + str(startTime.month).zfill(2) + str(startTime.day).zfill(2) + '_' +
 							str(endTime.year) + str(endTime.month).zfill(2) + str(endTime.day).zfill(2) + '_cells.data')
+				cells = {}
+				for track in stormTracks:
+					for cell in stormTracks[track]['cells']:
+						cells[cell] = activeStormCells[cell]
+						# Do this again since the serializable error keeps popping up
+						cells[cell]['time'] = str(cells[cell]['time'])
+						cells[cell]['start_time'] = str(cells[cell]['start_time'])
 				print 'Printing ' + filename
 				with open(outDir + '/' + filename, 'w') as outfile:
-					json.dump(activeStormCells, outfile, sort_keys=True, indent=0)
+					json.dump(cells, outfile, sort_keys=True, indent=0)
 
 			outfile.close()
 
