@@ -68,14 +68,14 @@ def checkArgs(args):
 	minCells = args['min_cells']
 	
 	if '\\' in inSuffix or '/' in inSuffix:
-		print('\nERROR: Input directory suffix must not contain / or \\.  Instead got: ' + inSuffix + '\n')
+		print '\nERROR: Input directory suffix must not contain / or \\.  Instead got: ' + inSuffix + '\n'
 		sys.exit(2)
-	else: print('Name of last subdirectory for original tracking files:  ' + inSuffix)
+	else: print 'Name of last subdirectory for original tracking files:  ' + inSuffix
 	
 	if minCells < MIN_MIN_CELLS or minCells > MAX_MIN_CELLS:
-		print('\nERROR: Min Cells must be in range ['  + str(MIN_MIN_CELLS) + ', ' + str(MAX_MIN_CELLS) + '].  Instead got: ' + str(minCells) + '\n')
+		print '\nERROR: Min Cells must be in range ['  + str(MIN_MIN_CELLS) + ', ' + str(MAX_MIN_CELLS) + '].  Instead got: ' + str(minCells) + '\n'
 		sys.exit(2)
-	else: print('Minimum number of cells per track:  ' + str(minCells))
+	else: print 'Minimum number of cells per track:  ' + str(minCells)
 	
 	
 #====================================================================================================================#
@@ -117,7 +117,7 @@ if __name__ == '__main__':
 
 
 	# Generate each map
-	print('Plotting figure...')
+	print 'Plotting figure...'
 
 	fig = plt.figure( 1)
 
