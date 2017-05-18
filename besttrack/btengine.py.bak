@@ -439,7 +439,7 @@ class btengine:
 
 			lock.acquire()
 			if counter.value % REPORT_EVERY == 0:
-				print('......' + str(counter.value) + ' of ' + str(totCells) + ' assigned......')
+				print '......' + str(counter.value) + ' of ' + str(totCells) + ' assigned......'
 			counter.value += 1
 			lock.release()
 
@@ -484,7 +484,7 @@ class btengine:
 		for track in trackSubset:
 			if len(stormTracks[track]['cells']) < 2:
 				lock.acquire()
-				if counter.value % REPORT_EVERY == 0: print('......' + str(counter.value) + ' of ' + str(totNumTracks) + ' tracks processed for ties......')
+				if counter.value % REPORT_EVERY == 0: print '......' + str(counter.value) + ' of ' + str(totNumTracks) + ' tracks processed for ties......'
 				counter.value += 1
 				lock.release()
 				continue
@@ -518,13 +518,13 @@ class btengine:
 						if cell != minCell:
 							stormTracks[track]['cells'].remove(cell)
 							cell['track'] = 'NaN'
-							modifiedCells[list(stormCells.keys())[list(stormCells.values()).index(cell)]] = cell
+							modifiedCells[stormCells.keys()[stormCells.values().index(cell)]] = cell
 					
 					breaks += 1
 
 			lock.acquire()
 			if counter.value % REPORT_EVERY == 0:
-				print('......' + str(counter.value) + ' of ' + str(totNumTracks) + ' tracks processed for ties......')
+				print '......' + str(counter.value) + ' of ' + str(totNumTracks) + ' tracks processed for ties......'
 			counter.value += 1
 			lock.release()
 	
@@ -572,7 +572,7 @@ class btengine:
 		outType = self.outType
 	
 		# Project onto equidistant coord system
-		print('\nProjecting storm cells onto equidistant coordinate system...')
+		print '\nProjecting storm cells onto equidistant coordinate system...'
 
 		#Projection variables
 		meanLat = np.mean([MIN_LAT, MAX_LAT])
@@ -609,12 +609,12 @@ class btengine:
 
 		distanceRatio = llDistMax / xyDistMax
 
-		print('Ratio between x-y distances and lat-lon distances: ' + str(distanceRatio))
-		print(DASHES)
+		print 'Ratio between x-y distances and lat-lon distances: ' + str(distanceRatio)
+		print DASHES
 
 		# Begin Calculations!
 
-		print('Beginning Calculations...')
+		print 'Beginning Calculations...'
 		if mapResults: scOrigin = copy.deepcopy(stormCells)
 		oldCells = []
 
@@ -627,39 +627,39 @@ class btengine:
 
 			# If dealing with a lot of data, only load 1 day (+- 6 hours) at a time
 			if bigData:
-				print('Identifying valid cells...')
+				print 'Identifying valid cells...'
 				for cell in stormCells:
 					if stormCells[cell]['time'].date() >= date - dt and stormCells[cell]['time'].date() <= date + dt:
 						activeCells.append(cell)
 			else:
-				activeCells = list(stormCells.keys())
+				activeCells = stormCells.keys()
 
-			if bigData: print('Processing ' + str(date) + '...')
+			if bigData: print 'Processing ' + str(date) + '...'
 
 			# Main iterations
 			for i in range(0, mainIters):
-				print('\nMain iteration: ' + str(i + 1))
+				print '\nMain iteration: ' + str(i + 1)
 
 				# Breakup iterations
 				for j in range(0, breakIters):
 
-					print('\nBreakup iteration: ' + str(j + 1))
-					print('Finding clusters...')
+					print '\nBreakup iteration: ' + str(j + 1)
+					print 'Finding clusters...'
 					stormTracks = self.find_clusters(stormCells, activeCells)
-					print('Number of clusters: ' + str(len(stormTracks)))
+					print 'Number of clusters: ' + str(len(stormTracks))
 
-					print('Computing Theil-Sen fit for each cluster...')
+					print 'Computing Theil-Sen fit for each cluster...'
 					stormTracks = self.theil_sen_batch(stormTracks)
 
 					# Assign cells to nearest cluster
-					print('Assigning each cell to nearest cluster...')
+					print 'Assigning each cell to nearest cluster...'
 
 
 					# Determine the number of cells per process
 					subsets = []
 					numPerProc = int(np.ceil(float(len(activeCells)) / multiprocessing.cpu_count()))
 					numDone = 0
-					for k in range(0, len(activeCells), numPerProc):
+					for k in xrange(0, len(activeCells), numPerProc):
 						temp = {}
 						for key in activeCells[k:k + numPerProc]:
 							temp[key] = stormCells[key]
@@ -689,8 +689,8 @@ class btengine:
 
 					del stormTracksG
 
-					print('All cells have been assigned!')
-					print('Number of modified cells: ' + str(changedCells))
+					print 'All cells have been assigned!'
+					print 'Number of modified cells: ' + str(changedCells)
 
 					# Stop if there are no changes
 					if changedCells == 0: break
@@ -698,19 +698,19 @@ class btengine:
 		        # ------ End of breakup iteration ------ #
 
 				# Find new clusters
-				print('\nFinding new clusters after breakup...')
+				print '\nFinding new clusters after breakup...'
 				lastNumTracks = len(stormTracks)
 				stormTracks = self.find_clusters(stormCells, activeCells)
-				print('Original number of clusters: ' + str(lastNumTracks))
-				print('New number of clusters: ' + str(len(stormTracks)))
+				print 'Original number of clusters: ' + str(lastNumTracks)
+				print 'New number of clusters: ' + str(len(stormTracks))
 
 				# Get Theil-Sen fit
-				print('Computing Theil-Sen fit for each new cluster...')
+				print 'Computing Theil-Sen fit for each new cluster...'
 				stormTracks = self.theil_sen_batch(stormTracks)
 				totNumTracks = len(stormTracks)
 
 				# Join similar clusters
-				print('Joining similar clusters...')
+				print 'Joining similar clusters...'
 				tracks = sorted(stormTracks.keys())
 				totNumTracks = len(tracks)
 				removeTracks = np.zeros(totNumTracks, dtype = bool)
@@ -721,7 +721,7 @@ class btengine:
 
 					# Skip tracks with only 1 cell
 					if len(stormTracks[track1]['cells']) < 2:
-						if j % REPORT_EVERY == 0: print('......' + str(j) + ' of ' + str(totNumTracks) + ' processed for joining......')
+						if j % REPORT_EVERY == 0: print '......' + str(j) + ' of ' + str(totNumTracks) + ' processed for joining......'
 						continue
 					if track1 == 'NaN': continue
 
@@ -790,33 +790,33 @@ class btengine:
 						stormTracks[track1] = self.theil_sen_single(stormTracks[track1])
 		
 					if j % REPORT_EVERY == 0:
-						print('......' + str(j) + ' of ' + str(totNumTracks) + ' processed for joining......')
+						print '......' + str(j) + ' of ' + str(totNumTracks) + ' processed for joining......'
 
 				del tracks
 				del removeTracks
 			
-				print('All tracks have been joined if necessary!')
-				print('Merged ' + str(merged) + ' tracks\n')
+				print 'All tracks have been joined if necessary!'
+				print 'Merged ' + str(merged) + ' tracks\n'
 
 				# ------ End of Joining process ------ #
 
-				print('Finding new clusters after joining...')
+				print 'Finding new clusters after joining...'
 				lastNumTracks = len(stormTracks)
 				stormTracks = self.find_clusters(stormCells, activeCells)
 				stormTracks = self.theil_sen_batch(stormTracks)
 				totNumTracks = len(stormTracks)
-				print('Original number of clusters: ' + str(lastNumTracks))
-				print('New number of clusters: ' + str(totNumTracks))
+				print 'Original number of clusters: ' + str(lastNumTracks)
+				print 'New number of clusters: ' + str(totNumTracks)
 
 				# Break ties (multiple cells assigned to same cluster at same time step)
-				print('\nBreaking ties...')
+				print '\nBreaking ties...'
 			
 				# Determine the number of cells per process
 				subsets = []
-				numPerProc = int(np.ceil(float(len(list(stormTracks.keys()))) / multiprocessing.cpu_count()))
-				for k in range(0, len(list(stormTracks.keys())), numPerProc):
+				numPerProc = int(np.ceil(float(len(stormTracks.keys())) / multiprocessing.cpu_count()))
+				for k in xrange(0, len(stormTracks.keys()), numPerProc):
 					temp = {}
-					for key in list(stormTracks.keys())[k:k + numPerProc]:
+					for key in stormTracks.keys()[k:k + numPerProc]:
 						temp[key] = stormTracks[key]
 					subsets.append(temp)
 				del temp
@@ -847,21 +847,21 @@ class btengine:
 				del stormTracksG
 				del stormCellsG
 			
-				print('All tracks have been processed for tie breaks')
-				print('Number of tie breaks: ' + str(breaks))
+				print 'All tracks have been processed for tie breaks'
+				print 'Number of tie breaks: ' + str(breaks)
 
 		    # ------ End of Main iteration ------ #
 
-			print('Finding new clusters after breakup...')
+			print 'Finding new clusters after breakup...'
 			lastNumTracks = len(stormTracks)
 			stormTracks = self.find_clusters(stormCells, activeCells)
 			stormTracks = self.theil_sen_batch(stormTracks)
 			totNumTracks = len(stormTracks)
-			print('Original number of clusters: ' + str(lastNumTracks))
-			print('New number of clusters: ' + str(totNumTracks))
+			print 'Original number of clusters: ' + str(lastNumTracks)
+			print 'New number of clusters: ' + str(totNumTracks)
 
 			# Remove clusters with too few cells
-			print('\nRemoving clusters with too few cells...')
+			print '\nRemoving clusters with too few cells...'
 			numRemoved = 0
 			for track in stormTracks:
 				if len(stormTracks[track]['cells']) < int(minCells):
@@ -870,7 +870,7 @@ class btengine:
 					numRemoved += 1
 			lastNumTracks = len(stormTracks)
 
-			print('\nPerforming final cluster identification...')
+			print '\nPerforming final cluster identification...'
 			stormTracks = self.find_clusters(stormCells, activeCells)
 			stormTracks = self.theil_sen_batch(stormTracks)
 			
@@ -882,15 +882,15 @@ class btengine:
 			stormTracks = self.theil_sen_batch(stormTracks)
 			stormTracks.pop('NaN', None)			
 
-			print('Number of removed tracks: ' + str(numRemoved + 1))
-			print('Original number of clusters: ' + str(lastNumTracks))
-			print('New number of clusters: ' + str(len(stormTracks)))
+			print 'Number of removed tracks: ' + str(numRemoved + 1)
+			print 'Original number of clusters: ' + str(lastNumTracks)
+			print 'New number of clusters: ' + str(len(stormTracks))
 
-			print(DASHES)
+			print DASHES
 
 			if mapResults:
 				self.generateMap(scOrigin, activeCells, stormTracks, bigData, date)
-				print(DASHES)
+				print DASHES
 			
 			# Save output
 			if output:
@@ -900,7 +900,7 @@ class btengine:
 	   		# Don't do it again if not bigData
 			if not bigData: break
 			
-			print(DASHES)
+			print DASHES
 		
 		return [stormCells, stormTracks]
 		
@@ -932,7 +932,7 @@ class btengine:
 		"""
 		
 
-		print('Preparing to plot maps...')
+		print 'Preparing to plot maps...'
 
 		# Get original storm tracks
 		stOrigin = self.find_clusters(scOrigin, activeCells)
@@ -943,7 +943,7 @@ class btengine:
 		lons = [MIN_LON, MAX_LON]
 
 		# Generate each map
-		print('Plotting figure...')
+		print 'Plotting figure...'
 
 		fig = plt.figure(1)
 
@@ -1004,7 +1004,7 @@ class btengine:
 
 			m.plot(finalCellsX, finalCellsY, color='r', linewidth=AFTER_WIDTH)
 	
-		print("Displaying plot.  Please close the figure to continue")	
+		print "Displaying plot.  Please close the figure to continue"	
 		plt.show()
 	
 		# Save map to file
@@ -1068,19 +1068,19 @@ class btengine:
 		meanLon = np.mean(lons)
 	
 		# Reset basemap for conversions
-		print('Preparing output...')
+		print 'Preparing output...'
 		# Setup equidistant map projection
 		m = Basemap(llcrnrlon=MIN_LON, llcrnrlat=MIN_LAT, urcrnrlon=MAX_LON, urcrnrlat=MAX_LAT,
 					projection='aeqd', lat_0=meanLat, lon_0=meanLon)
 
 		# Remove NaN track cells
-		print('Updating unassigned cells...')
+		print 'Updating unassigned cells...'
 		for cell in activeCells:
 			if stormCells[cell]['track'] == 'NaN': 
 				stormCells[cell]['track'] == str(stormCells[cell]['old_track']) + str(cell) + '_' + str(stormCells[cell]['time'].date())
-				print(stormCells[cell]['track'])
+				print stormCells[cell]['track']
 				
-		print('Finding new start time, age, and speed for each cell...')
+		print 'Finding new start time, age, and speed for each cell...'
 
 		# Get a smaller dict with the active cell info for efficiency
 		# It's easier to use direct access here than to iterate later
@@ -1094,7 +1094,7 @@ class btengine:
 			if bigData:
 				if stormTracks[track]['t0'].date() != date and stormTracks[track]['tend'].date() != date:
 					removeTracks.append(track)
-					if list(stormTracks.keys()).index(track) % REPORT_EVERY == 0: print('......' + str(list(stormTracks.keys()).index(track)) + ' of ' + str(len(stormTracks)) + ' tracks processed......')
+					if stormTracks.keys().index(track) % REPORT_EVERY == 0: print '......' + str(stormTracks.keys().index(track)) + ' of ' + str(len(stormTracks)) + ' tracks processed......'
 					continue
 
 			# Get start time and age
@@ -1147,7 +1147,7 @@ class btengine:
 				cell.pop('x', None)
 				cell.pop('y', None)
 
-				ids.append(list(activeStormCells.keys())[list(activeStormCells.values()).index(cell)])
+				ids.append(activeStormCells.keys()[activeStormCells.values().index(cell)])
 				old_IDs.append(cell['old_track'])
 
 			# Only save cell IDs to storm track to save space
@@ -1169,14 +1169,14 @@ class btengine:
 			stormTracks[track].pop('xf', None)
 			stormTracks[track].pop('yf', None)
 
-			if list(stormTracks.keys()).index(track) % REPORT_EVERY == 0: print('......' + str(list(stormTracks.keys()).index(track)) + ' of ' + str(totNumTracks) + ' tracks processed......')
+			if stormTracks.keys().index(track) % REPORT_EVERY == 0: print '......' + str(stormTracks.keys().index(track)) + ' of ' + str(totNumTracks) + ' tracks processed......'
 
 		# Remove tracks not part of this date
 		if bigData:
-			print('\nRemoving ' + str(len(removeTracks)) + ' invalid clusters...')
+			print '\nRemoving ' + str(len(removeTracks)) + ' invalid clusters...'
 			for track in removeTracks: 
 				stormTracks.pop(track, None)
-			print('New number of clusters: ' + str(len(stormTracks)))
+			print 'New number of clusters: ' + str(len(stormTracks))
 
 		if outType:
 			# Print data for each time step
@@ -1198,7 +1198,7 @@ class btengine:
 				filename = (str(cellTime.year) + str(cellTime.month).zfill(2) + str(cellTime.day).zfill(2) + '_' +
 							str(cellTime.hour).zfill(2) + str(cellTime.minute).zfill(2) + str(cellTime.second).zfill(
 							2) + '_cells.data')
-				print('Printing ' + filename)
+				print 'Printing ' + filename
 				with open(outDir + '/' + filename, 'w') as outfile:
 					json.dump(cells, outfile, sort_keys=True, indent=0)
 
@@ -1216,7 +1216,7 @@ class btengine:
 						cells[cell]['time'] = str(cells[cell]['time'])
 						cells[cell]['start_time'] = str(cells[cell]['start_time'])
 						
-				print('\nPrinting ' + filename)
+				print '\nPrinting ' + filename
 				with open(outDir + '/' + filename, 'w') as outfile:
 					json.dump(cells, outfile, sort_keys=True, indent=0)
 
@@ -1230,7 +1230,7 @@ class btengine:
 						# Do this again since the serializable error keeps popping up
 						cells[cell]['time'] = str(cells[cell]['time'])
 						cells[cell]['start_time'] = str(cells[cell]['start_time'])
-				print('Printing ' + filename)
+				print 'Printing ' + filename
 				with open(outDir + '/' + filename, 'w') as outfile:
 					json.dump(cells, outfile, sort_keys=True, indent=0)
 
@@ -1239,13 +1239,13 @@ class btengine:
 			# Print stormTracks to data file
 			if bigData:
 				filename = str(date.year) + str(date.month).zfill(2) + str(date.day).zfill(2) + '_tracks.data'
-				print('Printing ' + filename)
+				print 'Printing ' + filename
 				with open(outDir + '/' + filename, 'w') as outfile:
 					json.dump(stormTracks, outfile, sort_keys=True, indent=0)
 			else:
 				filename = (str(startTime.year) + str(startTime.month).zfill(2) + str(startTime.day).zfill(2) + '_' +
 							str(endTime.year) + str(endTime.month).zfill(2) + str(endTime.day).zfill(2) + '_tracks.data')
-				print('Printing ' + filename)
+				print 'Printing ' + filename
 				with open(outDir + '/' + filename, 'w') as outfile:
 					json.dump(stormTracks, outfile, sort_keys=True, indent=0)
 
@@ -1257,7 +1257,7 @@ class btengine:
 		else:
 			filename = (str(startTime.year) + str(startTime.month).zfill(2) + str(startTime.day).zfill(2) + '_' +
 						str(endTime.year) + str(endTime.month).zfill(2) + str(endTime.day).zfill(2) + '.meta')
-		print('Printing ' + filename + '\n\n')
+		print 'Printing ' + filename + '\n\n'
 		f = open(outDir + '/' + filename, 'w')
 		f.write('Run Start: ' + str(self.runstart) + '\n')
 		f.write('Start Time: ' + str(self.startTime) + '\n')

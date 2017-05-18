@@ -77,7 +77,7 @@ def readRyan(inDir, inSuffix, startTime, endTime):
 				try:
 					fileDate = datetime.datetime.strptime(str(trackFile).split('_')[0], '%Y-%m-%d-%H%M%S')
 				except ValueError:
-					print('File ' + str(trackFile) + ' has an invalid name.  Expected format YYYY-MM-DD-hhmmss_...')
+					print 'File ' + str(trackFile) + ' has an invalid name.  Expected format YYYY-MM-DD-hhmmss_...'
 					continue
 				if not startTime <= fileDate < endTime:
 					continue
@@ -90,11 +90,11 @@ def readRyan(inDir, inSuffix, startTime, endTime):
 				
 				# Skip probSevere files
 				if int(lines[28].split()[0]) == 1:
-					print('\nWARNING: Unable to process storm objects from probSevere in Ryan format.  Use "-t probsevere" instead.')
-					print(str(trackFile) + ' will be skipped.\n')
+					print '\nWARNING: Unable to process storm objects from probSevere in Ryan format.  Use "-t probsevere" instead.'
+					print str(trackFile) + ' will be skipped.\n'
 					continue
 				
-				print(trackFile)
+				print trackFile
 				numTrackTimes += 1
 				
 				# Get Individual cell metadata
@@ -153,7 +153,7 @@ def readSegmotion(inDir, inSuffix, startTime, endTime):
 				try:
 					fileDate = datetime.datetime.strptime(str(trackFile).split('.')[0], '%Y%m%d-%H%M%S')
 				except ValueError:
-					print('File ' + str(trackFile) + ' has an invalid name.  Expected format YYYYMMDD-hhmmss.xml...')
+					print 'File ' + str(trackFile) + ' has an invalid name.  Expected format YYYYMMDD-hhmmss.xml...'
 					continue
 				if not startTime <= fileDate < endTime:
 					continue
@@ -164,7 +164,7 @@ def readSegmotion(inDir, inSuffix, startTime, endTime):
 				lines = BeautifulSoup(f, 'html.parser').find_all('datacolumn')
 				f.close()
 				
-				print(trackFile)
+				print trackFile
 				numTrackTimes += 1
 				
 				numCells = len(lines[2].find_all('item'))
@@ -231,7 +231,7 @@ def readProbSevere(inDir, inSuffix, startTime, endTime):
 					time = str(trackFile).split('.')[0].split('_')[4]
 					fileDate = datetime.datetime.strptime(date + '_' + time, '%Y%m%d_%H%M%S')
 				except ValueError:
-					print('File ' + str(trackFile) + ' has an invalid name.  Expected format SSEC_AWIPS_PROBSEVERE_YYYYMMDD_hhmmss.ascii...')
+					print 'File ' + str(trackFile) + ' has an invalid name.  Expected format SSEC_AWIPS_PROBSEVERE_YYYYMMDD_hhmmss.ascii...'
 					continue
 				if not startTime <= fileDate < endTime:
 					continue
@@ -243,14 +243,14 @@ def readProbSevere(inDir, inSuffix, startTime, endTime):
 				lines = f.readlines()
 				f.close()
 				
-				print(trackFile)
+				print trackFile
 				numTrackTimes += 1
 				
 				for line in lines:
 					if line.startswith('Valid:'): continue
 					data = str(line).split(':')
-					lats = list(map(float, data[7].split(',')[0::2]))
-					lons = list(map(float, data[7].split(',')[1::2]))
+					lats = map(float, data[7].split(',')[0::2])
+					lons = map(float, data[7].split(',')[1::2])
 					track = data[8]						
 					
 					latr = (max(lats) - min(lats)) / 2.
